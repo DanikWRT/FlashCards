@@ -1,0 +1,33 @@
+FlashCards K3 — Quiz/test mode verification
+Branch: wt/k3
+Date: 2025-09-30
+Tool: Playwright (chromium headless) against local vite dev server on :5174
+Seed: 7-card set (id k3-test-set-0001) with word/translation/examples; 'water' has empty examples to exercise fallback hint; several cards have family.
+
+CONFIRMED (all via automated DOM assertions):
+1. Direction switcher: default en-ru; switching to ru-en re-inits the run.
+   - en-ru prompt = English word, choices = Russian translations.
+   - ru-en prompt = Russian translation, choices = English words.
+2. Each question shows exactly 4 choices, 4 distinct values, including the correct answer.
+   Correct = translation (en-ru) or word (ru-en); order randomized each question.
+3. On answer:
+   - correct choice highlighted green (.correct).
+   - wrong pick additionally highlighted red (.wrong).
+   - hint shown only AFTER a wrong answer (absent before answering).
+   - hint contains examples[0].en, examples[0].ru, and family when present.
+   - fallback hint ("Правильный ответ: ...") used when examples are empty.
+   - "Далее" (Next) button advances to the next question.
+4. Scoring: score counter (X / Y правильных), progress bar, and results screen
+   "X из N правильных" plus percentage.
+   - en-ru run with one deliberate wrong pick -> "6 из 7 правильных" (86%).
+   - ru-en fully correct run -> "7 из 7 правильных".
+   - results screen has "Начать заново" (restart) button.
+5. Shuffle: cards shown in a different order than original; each card shown exactly once per pass.
+6. fc_stats_<setId> incremented for every displayed card, keyed by ORIGINAL index.
+   Verified all 7 original indices present/incremented in fc_stats_k3-test-set-0001.
+
+Screenshots:
+  fc_k3_question.png — question with 4 choices (en-ru).
+  fc_k3_hint.png     — hint visible after a wrong answer.
+
+npm run build: PASS (clean).
