@@ -33,3 +33,38 @@ export function removeSet(id) {
   const sets = loadSets().filter((s) => s.id !== id)
   saveSets(sets)
 }
+
+// Per-set view counters, stored under "fc_stats_<setId>" keyed by card index.
+const STATS_PREFIX = 'fc_stats_'
+
+function statsKey(setId) {
+  return STATS_PREFIX + setId
+}
+
+export function getStats(setId) {
+  try {
+    const raw = localStorage.getItem(statsKey(setId))
+    return raw ? JSON.parse(raw) : {}
+  } catch (e) {
+    console.error('Failed to load stats', e)
+    return {}
+  }
+}
+
+// Record that card at `index` was displayed. Doesn't touch ordering.
+export function recordCardView(setId, index) {
+  const key = statsKey(setId)
+  let stats = {}
+  try {
+    stats = JSON.parse(localStorage.getItem(key) || '{}')
+  } catch (e) {
+    stats = {}
+  }
+  const idx = String(index)
+  stats[idx] = (stats[idx] || 0) + 1
+  try {
+    localStorage.setItem(key, JSON.stringify(stats))
+  } catch (e) {
+    console.error('Failed to save stats', e)
+  }
+}
