@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { getSet, recordCardView } from '../store.js'
+import { useEffect, useRef, useState } from 'react'
+import { getSet, getStats, recordCardView } from '../store.js'
 
 // ---------- Test mode helpers ----------
 
@@ -184,28 +184,93 @@ function Quiz({ set, id }) {
   )
 }
 
+// K4 priority mode helpers ------------------------------------------------------
+// Persisted mode across sessions: 'on' (sort by view count, default) / 'off'.
+const PRIORITY_KEY = 'fc_priority_mode'
+
+function readPriority() {
+  return localStorage.getItem(PRIORITY_KEY) !== 'off' // default to 'on'
+}
+
 export default function SetPage() {
   const { id } = useParams()
   const [set] = useState(() => getSet(id))
   const [mode, setMode] = useState('cards')
-  const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [priority, setPriorityMode] = useState(readPriority)
+
+  // Display order of card indices for the current pass of cards mode.
+  // Computed once on entry / restart, then fixed for the whole pass.
+  const [order, setOrder] = useState(() => {
+    if (!set) return []
+    const base = set.cards.map((_, i) => i)
+    if (!readPriority()) return base
+    const stats = getStats(id)
+    // Stable sort in modern JS keeps equal-count cards in original order.
+    return [...base].sort((a, b) => (stats[String(a)] || 0) - (stats[String(b)] || 0))
+  })
+  const [pos, setPos] = useState(0)
 
   const count = set ? set.cards.length : 0
-  const current = set ? set.cards[index] || null : null
 
-  // View counter: increments for the currently displayed card (keyed on index).
+  // Recompute the display order for a given priority mode (stable sort).
+  const computeOrder = (usePriority) => {
+    if (!set) return []
+    const base = set.cards.map((_, i) => i)
+    if (!usePriority) return base
+    const stats = getStats(id)
+    return [...base].sort((a, b) => (stats[String(a)] || 0) - (stats[String(b)] || 0))
+  }
+
+  // When switching INTO cards mode (e.g. from test), recompute a fresh pass.
+  // Guard with the previous mode so this does NOT fire on the initial mount
+  // (which would re-sort after the first view was already counted, changing the
+  // order mid-pass). The pass order is otherwise fixed for its whole duration.
+  const prevMode = useRef(mode)
   useEffect(() => {
-    if (!current) return
-    recordCardView(id, index)
-  }, [id, index, current])
+    if (mode === 'cards' && prevMode.current !== 'cards') {
+      setOrder(computeOrder(priority))
+      setPos(0)
+      setFlipped(false)
+    }
+    prevMode.current = mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  // The real card index currently displayed = order[pos] (display position).
+  const currentIndex = set && order.length ? order[pos] : -1
+  const current = set && currentIndex >= 0 ? set.cards[currentIndex] || null : null
+
+  // Reused by restart / toggle with the same compute logic.
+  const applyOrder = (usePriority) => {
+    setOrder(computeOrder(usePriority))
+    setPos(0)
+    setFlipped(false)
+  }
+
+  // View counter: increments for the currently displayed ORIGINAL card index.
+  useEffect(() => {
+    if (currentIndex < 0 || !current) return
+    recordCardView(id, currentIndex)
+  }, [id, currentIndex, current])
+
+  // "Заново": reset to the start of the pass and recompute the order once.
+  const restart = () => applyOrder(priority)
+
+  // Toggle priority mode; persists to localStorage and reorders immediately.
+  const togglePriority = () => {
+    const next = !priority
+    setPriorityMode(next)
+    localStorage.setItem(PRIORITY_KEY, next ? 'on' : 'off')
+    applyOrder(next)
+  }
 
   const goPrev = () => {
-    setIndex((i) => Math.max(i - 1, 0))
+    setPos((p) => Math.max(p - 1, 0))
     setFlipped(false)
   }
   const goNext = () => {
-    setIndex((i) => Math.min(i + 1, count - 1))
+    setPos((p) => Math.min(p + 1, count - 1))
     setFlipped(false)
   }
 
@@ -216,11 +281,11 @@ export default function SetPage() {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
       if (e.key === 'ArrowRight') {
         e.preventDefault()
-        setIndex((i) => Math.min(i + 1, count - 1))
+        setPos((p) => Math.min(p + 1, count - 1))
         setFlipped(false)
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        setIndex((i) => Math.max(i - 1, 0))
+        setPos((p) => Math.max(p - 1, 0))
         setFlipped(false)
       } else if (e.key === ' ') {
         e.preventDefault()
@@ -303,13 +368,29 @@ export default function SetPage() {
         </div>
       ) : (
         <div className="deck">
-          <div
-            className="flashcard-scene"
-            role="button"
-            tabIndex={0}
-            onClick={() => setFlipped((f) => !f)}
-            onKeyDown={(e) => { if (e.key === 'Enter') setFlipped((f) => !f) }}
-          >
+          <div className="deck-toolbar">
+            <label className="priority-toggle">
+              <input
+                type="checkbox"
+                checked={priority}
+                onChange={togglePriority}
+              />
+              <span>Приоритет повторения</span>
+            </label>
+            <button type="button" className="btn btn-outline" onClick={restart}>
+              Заново
+            </button>
+          </div>
+
+          <div className="flashcard-wrap">
+            <span className="view-badge">Показов: {(getStats(id)[String(currentIndex)] || 0)}</span>
+            <div
+              className="flashcard-scene"
+              role="button"
+              tabIndex={0}
+              onClick={() => setFlipped((f) => !f)}
+              onKeyDown={(e) => { if (e.key === 'Enter') setFlipped((f) => !f) }}
+            >
             <div className={'flashcard' + (flipped ? ' flipped' : '')}>
               <div className="flashcard-face front">
                 <span className="face-label">EN · Слово</span>
@@ -331,11 +412,12 @@ export default function SetPage() {
               </div>
             </div>
           </div>
+          </div>
 
           <div className="deck-controls">
-            <button className="btn btn-outline" onClick={goPrev} disabled={index === 0}>← Назад</button>
-            <span className="deck-progress">Карточка {index + 1} из {count}</span>
-            <button className="btn btn-outline" onClick={goNext} disabled={index === count - 1}>Вперёд →</button>
+            <button className="btn btn-outline" onClick={goPrev} disabled={pos === 0}>← Назад</button>
+            <span className="deck-progress">Карточка {pos + 1} из {count}</span>
+            <button className="btn btn-outline" onClick={goNext} disabled={pos === count - 1}>Вперёд →</button>
           </div>
         </div>
       )}
