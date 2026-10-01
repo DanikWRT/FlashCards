@@ -1811,7 +1811,8 @@ export default function SetPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page set-layout">
+      <aside className="set-sidebar">
       <div className="set-head">
         <Link to="/" className="back-link">← Мои наборы</Link>
         <h1>{set.topic || 'Без названия'}</h1>
@@ -1839,7 +1840,9 @@ export default function SetPage() {
       )}
 
       <ProgressOverview />
+      </aside>
 
+      <div className="set-main">
       <div className="mode-switcher" role="tablist" aria-label="Режим просмотра">
         <button
           type="button"
@@ -1918,6 +1921,7 @@ export default function SetPage() {
         </button>
       </div>
 
+      <div className="mode-stage">
       {count === 0 ? (
         <div className="test-placeholder">
           <p>В этом наборе нет карточек.</p>
@@ -2056,7 +2060,9 @@ export default function SetPage() {
           </div>
         </div>
       )}
+      </div>{/* /mode-stage */}
 
+      </div>{/* /set-main */}
       {fullscreen && current && (
         <div className="fs-overlay" data-testid="fs-overlay">
           <div className="fs-toolbar">

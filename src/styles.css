@@ -1887,6 +1887,150 @@ h1 {
   }
 }
 
+/* ---------- K14 Set page two-panel layout ---------- */
+.set-layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+/* Left info sidebar (fixed ~250px on desktop, sticky under the header). */
+.set-sidebar {
+  width: 250px;
+  flex: 0 0 250px;
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* Compact info panel blocks inside the sidebar. */
+.set-sidebar .set-head {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.set-sidebar .set-head h1 {
+  font-size: 18px;
+  margin: 6px 0;
+  word-break: break-word;
+}
+.set-sidebar .set-count.big {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.set-sidebar .back-link {
+  margin-bottom: 6px;
+}
+.set-sidebar .lesson-meta {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.set-sidebar .k9-progress {
+  margin: 0;
+  padding: 14px;
+}
+.set-sidebar .k9-progress-stats {
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.set-sidebar .k9-stat {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.set-sidebar .k9-mastery-wrap {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.set-sidebar .k9-mastery-label {
+  white-space: normal;
+  font-size: 12px;
+}
+.set-sidebar .k9-progress-actions {
+  flex-direction: column;
+  gap: 8px;
+}
+.set-sidebar .k9-progress-actions .btn {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+/* Main (right) area: mode switcher on top + centered content stage. */
+.set-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Mode switcher at START (top) of the main area, compact tabs. */
+.set-main .mode-switcher {
+  margin: 0;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+.set-main .mode-btn {
+  white-space: nowrap;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+/* Stable centered content stage: reserved min-height + flex centering so
+   switching modes, changing cards, or showing hints never shifts the layout. */
+.mode-stage {
+  flex: 1;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Center the mode content inside the stage and neutralize its own top margins. */
+.mode-stage > .deck,
+.mode-stage > .quiz,
+.mode-stage > .test-placeholder {
+  width: 100%;
+  margin: 0;
+}
+
+/* ---------- Responsive: sidebar collapses to a full-width header on mobile ---------- */
+@media (max-width: 900px) {
+  .set-layout {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .set-sidebar {
+    position: static;
+    width: 100%;
+    flex: none;
+    gap: 10px;
+  }
+  .set-sidebar .k9-progress-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .set-main {
+    width: 100%;
+  }
+  .mode-stage {
+    min-height: 420px;
+  }
+}
+
 /* Fullscreen presentation overlay (in-app, robust). */
 .fs-overlay {
   position: fixed;
