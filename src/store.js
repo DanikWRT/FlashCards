@@ -378,7 +378,7 @@ export function toggleCardStarred(setId, index) {
 // ---------- K9 spaced repetition & progress ----------
 
 function dailylKey() {
-  return 'fc_daily_stats_' + userPrefix()
+  return 'fc_daily_stats' + (userPrefix() ? '_' + progressUser : '')
 }
 const REVIEW_LADDER = [1, 3, 7, 15, 30, 60, 120]
 
