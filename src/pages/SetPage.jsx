@@ -1540,6 +1540,50 @@ function persistPlayInterval(v) {
   localStorage.setItem(PLAY_INTERVAL_KEY, String(v))
 }
 
+// K15 keyboard legend: a compact, collapsible shortcut reference that is
+// reachable from EVERY study mode (not only cards). Shared Russian labels are
+// the single source of truth for the shortcut text.
+function KeyboardLegend() {
+  const [open, setOpen] = useState(false)
+  const rows = [
+    ['← / →', 'предыдущая / следующая карточка (Карточки)'],
+    ['Пробел', 'перевернуть карточку (Карточки)'],
+    ['Enter', 'проверить ответ (Write / Тест)'],
+    ['S', 'перемешать'],
+    ['P', 'play / пауза (Карточки)'],
+    ['F', 'полный экран'],
+    ['Esc', 'закрыть полный экран'],
+  ]
+  return (
+    <div className="kb-legend" data-testid="kb-legend">
+      <button
+        type="button"
+        className="kb-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        data-testid="kb-toggle"
+        title="Управление клавиатурой"
+      >
+        <span className="kb-icon">?</span>
+        <span className="kb-title">Управление клавиатурой</span>
+        <span className="kb-chevron">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <table className="kb-table" data-testid="kb-table">
+          <tbody>
+            {rows.map(([key, desc]) => (
+              <tr key={key}>
+                <td className="kb-key">{key}</td>
+                <td className="kb-desc">{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 export default function SetPage() {
   const { id } = useParams()
   const [set] = useState(() => getSet(id))
@@ -1714,32 +1758,76 @@ export default function SetPage() {
     setFlipped(false)
   }
 
-  // Hotkeys (cards mode): ArrowLeft/ArrowRight = prev/next, Space = flip,
-  // S = shuffle, P = play/pause. Ignored while typing in an input/textarea.
+  // K15 GLOBAL keyboard shortcuts (work in EVERY study mode on this page).
+  // Refs hold the latest state + handlers so a single stable keydown listener
+  // never goes stale, avoiding re-registration churn on every state change.
+  const hotkeys = useRef({
+    mode, count, total: order.length, fullscreen,
+    goNext, goPrev, shuffleNow, setFlipped, setPlaying, setFullscreen,
+  })
+  hotkeys.current = {
+    mode, count, total: order.length, fullscreen,
+    goNext, goPrev, shuffleNow, setFlipped, setPlaying, setFullscreen,
+  }
+
   useEffect(() => {
     const onKey = (e) => {
+      const h = hotkeys.current
       const t = e.target
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
-      if (mode !== 'cards') return
-      if (e.key === 'ArrowRight') {
+      const inField =
+        t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+
+      // Escape always closes fullscreen — even while typing in an input.
+      if (e.key === 'Escape') {
+        if (h.fullscreen) {
+          e.preventDefault()
+          h.setFullscreen(false)
+        }
+        return
+      }
+
+      // Never let global shortcuts fire while the user is typing in a text
+      // field (letter keys s/p/f, arrows, space, enter are all ignored here).
+      // The Write / Spell / Test typed inputs handle Enter themselves locally.
+      if (inField) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      const k = e.key
+
+      // 'F' toggles fullscreen in every mode.
+      if (k === 'f' || k === 'F' || k === 'а') {
         e.preventDefault()
-        goNext()
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        goPrev()
-      } else if (e.key === ' ') {
-        e.preventDefault()
-        setFlipped((f) => !f)
-      } else if (e.key === 's' || e.key === 'S' || e.key === 'ы') {
-        shuffleNow()
-      } else if (e.key === 'p' || e.key === 'P' || e.key === 'з') {
-        setPlaying((v) => !v)
+        h.setFullscreen((v) => !v)
+        return
+      }
+
+      // Cards-mode actions: prev/next, flip, shuffle, play/pause.
+      if (h.mode === 'cards') {
+        if (k === 'ArrowRight') {
+          e.preventDefault(); h.goNext()
+        } else if (k === 'ArrowLeft') {
+          e.preventDefault(); h.goPrev()
+        } else if (k === ' ') {
+          e.preventDefault(); h.setFlipped((f) => !f)
+        } else if (k === 's' || k === 'S' || k === 'ы') {
+          e.preventDefault(); h.shuffleNow()
+        } else if (k === 'p' || k === 'P' || k === 'з') {
+          e.preventDefault(); h.setPlaying((v) => !v)
+        }
+        return
+      }
+
+      // Non-cards modes: keep consistent 'S' shuffle and 'P' play/pause
+      // available (they operate on the cards pass order).
+      if (k === 's' || k === 'S' || k === 'ы') {
+        e.preventDefault(); h.shuffleNow()
+      } else if (k === 'p' || k === 'P' || k === 'з') {
+        e.preventDefault(); h.setPlaying((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count, mode, priority, starredOnly, fullscreen])
+  }, [])
 
   // K9: progress overview (X из N per status), mastery bar, reset + report.
   const ProgressOverview = () => {
@@ -1921,6 +2009,8 @@ export default function SetPage() {
         </button>
       </div>
 
+      <KeyboardLegend />
+
       <div className="mode-stage">
       {count === 0 ? (
         <div className="test-placeholder">
@@ -2056,7 +2146,7 @@ export default function SetPage() {
           </div>
 
           <div className="keys-hints" data-testid="keys-hints">
-            ← →: листать · Пробел: переворот · S: перемешать · P: play/pause
+            ← →: листать · Пробел: переворот · S: перемешать · P: play/pause · F: полный экран · Esc: закрыть
           </div>
         </div>
       )}

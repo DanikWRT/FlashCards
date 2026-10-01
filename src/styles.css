@@ -2086,6 +2086,80 @@ h1 {
 .fs-card-scene .flashcard-face .back-translation { color: #7dd3fc; font-size: 32px; }
 .fs-card-scene .flashcard-face .face-hint { color: #64748b; }
 .fs-card-scene .card-image { border-color: #334155; }
+/* ---------- K15 keyboard legend ---------- */
+.kb-legend {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.kb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.kb-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.kb-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.kb-title {
+  flex: 1;
+}
+.kb-chevron {
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.15s;
+}
+.kb-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.kb-table tr {
+  border-bottom: 1px solid var(--bg);
+}
+.kb-table tr:last-child {
+  border-bottom: none;
+}
+.kb-key {
+  padding: 5px 12px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--primary-dark);
+  font-variant-numeric: tabular-nums;
+}
+.kb-desc {
+  padding: 5px 12px 5px 0;
+  color: var(--text);
+}
+
 .fs-controls { display: flex; gap: 16px; }
 .fs-controls .btn { font-size: 22px; padding: 10px 24px; }
 .fs-controls .btn:disabled { opacity: 0.4; cursor: not-allowed; }
