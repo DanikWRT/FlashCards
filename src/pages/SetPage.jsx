@@ -6,6 +6,7 @@ import {
   resetSetProgress, downloadProgressReport, recordStudyDay,
   getCardStarred, toggleCardStarred, saveBlastScore,
 } from '../store.js'
+import { matchAnswer } from '../normalize.js'
 
 // ---------- K10 flashcard helpers ----------
 
@@ -499,8 +500,7 @@ function TypedQuestion({ q, feedback, onAnswer }) {
   const [input, setInput] = useState('')
   const submit = () => {
     if (feedback) return
-    const given = input.trim().toLowerCase()
-    const correct = given === q.correct.trim().toLowerCase()
+    const correct = matchAnswer(input, q.correct)
     onAnswer(q.cardIndex, correct, { cardIndex: q.cardIndex, type: q.type, prompt: q.prompt, correct: q.correct })
   }
   return (
@@ -534,8 +534,8 @@ function TypedQuestion({ q, feedback, onAnswer }) {
         )}
       </form>
       {feedback && (
-        <div className={'study-feedback ' + (input.trim().toLowerCase() === q.correct.trim().toLowerCase() ? 'correct' : 'wrong')}>
-          {input.trim().toLowerCase() === q.correct.trim().toLowerCase()
+        <div className={'study-feedback ' + (matchAnswer(input, q.correct) ? 'correct' : 'wrong')}>
+          {matchAnswer(input, q.correct)
             ? 'Верно!'
             : <>Неверно. Правильный ответ: <strong>{q.correct}</strong></>}
         </div>
@@ -958,8 +958,7 @@ function Write({ set, id }) {
 
   const submit = (given) => {
     if (phase !== 'question') return
-    const answer = (given === undefined ? input : given).trim().toLowerCase()
-    const isCorrect = answer === correct.trim().toLowerCase()
+    const isCorrect = matchAnswer(given === undefined ? input : given, correct)
     setResult(isCorrect ? 'correct' : 'wrong')
     s.applyResult(isCorrect)
     setPhase('feedback')
@@ -1093,8 +1092,7 @@ function Spell({ set, id }) {
 
   const submit = (given) => {
     if (phase !== 'question') return
-    const answer = (given === undefined ? input : given).trim().toLowerCase()
-    const isCorrect = answer === correct.trim().toLowerCase()
+    const isCorrect = matchAnswer(given === undefined ? input : given, correct)
     setResult(isCorrect ? 'correct' : 'wrong')
     s.applyResult(isCorrect)
     setPhase('feedback')
