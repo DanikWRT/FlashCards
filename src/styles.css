@@ -11,6 +11,16 @@
   --radius: 12px;
   --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
   --shadow-lg: 0 10px 25px -5px rgba(16, 24, 40, 0.12);
+  /* K17: measured height of the compact header. Set to 0 when the header is
+     collapsed so the sticky left sidebar sticks to the very top of the page. */
+  --header-h: 44px;
+}
+
+.app.header-collapsed {
+  --header-h: 0px;
+}
+.app.header-collapsed .header {
+  display: none;
 }
 
 * {
@@ -31,36 +41,46 @@ a {
 }
 
 /* ---------- Layout ---------- */
+/* K17: compact one-line sticky header. Its height is driven by --header-h so
+   the left sidebar can track it (and drop to top:0 when the header is hidden).
+   A small ▴ toggle in the header collapses it; an 'H' shortcut does too; a
+   slim floating '▾ Шапка' restore button appears when it's collapsed. */
 .header {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 60;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 28px;
+  gap: 12px;
+  height: var(--header-h, 44px);
+  padding: 0 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
 .brand {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.3px;
   color: var(--primary);
+  white-space: nowrap;
 }
 
 .nav {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .nav-link {
-  padding: 8px 14px;
+  padding: 6px 10px;
   border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--muted);
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -73,10 +93,55 @@ a {
   background: rgba(59, 130, 246, 0.1);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Collapse (in-header) + restore (floating) header controls. */
+.header-toggle {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.header-toggle:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.header-show {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 70;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.header-show:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
 .main {
   max-width: 980px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 16px 24px 48px;
 }
 
 /* ---------- K13 auth ---------- */
@@ -499,31 +564,35 @@ h1 {
 }
 
 /* Deck layout */
+/* K17: tightened vertical rhythm so the whole card block (toolbar + card +
+   controls + hints) fits a ~768px viewport without scrolling. */
 .deck {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 14px;
   margin-top: 24px;
 }
 
-/* K4 priority toolbar (toggle + restart) */
+/* K4/K17 priority toolbar (toggle + play + shuffle + restart). Made into a
+   single compact collapsible row (A4-b): small controls, tight gaps, and a
+   ⚙/chevron toggle to tuck it away so it never obstructs card viewing. */
 .deck-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
 }
 
-.priority-toggle {
+.deck-toolbar .priority-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  font-size: 14px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
-  padding: 9px 14px;
+  padding: 5px 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -531,6 +600,40 @@ h1 {
   cursor: pointer;
   user-select: none;
   transition: color 0.15s, border-color 0.15s;
+}
+
+.deck-toolbar .btn {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.deck-toolbar select {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.deck-toolbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.deck-toolbar-toggle:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+.toolbar-chevron {
+  font-size: 10px;
 }
 
 .priority-toggle:hover {
@@ -1559,14 +1662,29 @@ h1 {
 }
 
 /* ---------- K10 flashcard extras ---------- */
-/* K16: the three round control buttons (sound / star / fullscreen) sit on a
-   dedicated row ABOVE the flashcards. Positioned in normal flow (not absolute),
-   so they never overlap the red view/review badges on the card corners. */
-.card-actions {
+/* K17 (A5): the three round control buttons (sound / star / fullscreen) now
+   sit ON the card as a single centered strip at the top edge, between the left
+   review marker (к повторению) and the right views badge (Показов: N). It is
+   absolutely centered so it never overlaps either corner badge nor the card. */
+.flashcard-wrap .card-actions {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
   display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-bottom: 14px;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+.flashcard-wrap .card-actions .btn-icon {
+  width: 34px; height: 34px;
+  font-size: 15px;
 }
 
 .btn-icon {
@@ -1606,12 +1724,12 @@ h1 {
 }
 
 .deck-toolbar select {
-  padding: 9px 12px;
+  padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   box-shadow: var(--shadow);
@@ -1889,18 +2007,22 @@ h1 {
 }
 
 /* ---------- K14 Set page two-panel layout ---------- */
+/* K17: tightened gap so the cards feel more compact and the sidebar sticks
+   closer to the (now compact/collapsible) header via --header-h. */
 .set-layout {
   display: flex;
-  gap: 28px;
+  gap: 16px;
   align-items: flex-start;
 }
 
-/* Left info sidebar (fixed ~250px on desktop, sticky under the header). */
+/* Left info sidebar (fixed ~250px on desktop, sticky under the header).
+   top tracks the compact header height; when the header is collapsed
+   (--header-h:0) the sidebar pins to the very top of the page. */
 .set-sidebar {
   width: 250px;
   flex: 0 0 250px;
   position: sticky;
-  top: 84px;
+  top: var(--header-h, 44px);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1965,13 +2087,13 @@ h1 {
   padding: 8px 10px;
 }
 
-/* Main (right) area: mode switcher on top + centered content stage. */
+/* Main (right) area: mode switcher on top + content stage. */
 .set-main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -1989,15 +2111,16 @@ h1 {
   font-size: 14px;
 }
 
-/* Stable centered content stage: reserved min-height + flex centering so
-   switching modes, changing cards, or showing hints never shifts the layout. */
+/* Content stage: reserved min-height keeps the layout stable across mode
+   switches. K17 (A2): content stacks from the TOP of the stage (not pushed
+   to vertical center), so the task/card sits as high as possible. */
 .mode-stage {
   flex: 1;
-  min-height: 560px;
+  min-height: 430px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 /* Center the mode content inside the stage and neutralize its own top margins. */
@@ -2008,16 +2131,15 @@ h1 {
   margin: 0;
 }
 
-/* ---------- K16 Set page: shift the layout left + center the tasks ----------
-   The default `.main` container (max-width 980px, margin:0 auto) centers the
-   whole two-panel block, which pushes the sidebar too far right and makes the
-   card area feel off-center. For the set page we widen the container and pin it
-   toward the left edge so the left info panel starts near the viewport's left,
-   while the wider main area lets the cards/tasks sit truly centered. */
+/* ---------- K16/K17 Set page: shift the layout left + tasks high ----------
+   Widen the container and pin it toward the left edge. K17 (A3) trims ~16px
+   more from the left side (smaller centering offset + smaller left padding)
+   so the working area sits a bit more comfortably left while staying centered. */
 .main:has(.set-page) {
   max-width: 1240px;
-  margin-left: max(16px, calc((100vw - 1240px) / 2));
+  margin-left: max(8px, calc((100vw - 1240px) / 2 - 16px));
   margin-right: 16px;
+  padding: 6px 20px 10px;
 }
 
 /* ---------- Responsive: sidebar collapses to a full-width header on mobile ---------- */
@@ -2171,6 +2293,48 @@ h1 {
 .kb-desc {
   padding: 5px 12px 5px 0;
   color: var(--text);
+}
+
+/* ---------- K17 layout refinements ---------- */
+/* Legend now sits BELOW the stage at the bottom of the main area; keep it
+   compact and hugging the stage with only a tiny top margin. */
+.set-page .kb-legend {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 380px;
+  margin-top: 2px;
+}
+.set-page .kb-toggle {
+  padding: 6px 12px;
+}
+.set-page .kb-table,
+.set-page .kb-key,
+.set-page .kb-desc {
+  font-size: 12px;
+}
+
+/* Shorten the flip card on the set page so toolbar + card + controls + legend
+   fit a ~768px viewport without vertical scrolling. */
+.set-page .flashcard-scene {
+  height: 300px;
+}
+
+@media (max-width: 900px) {
+  /* On small screens the header collapse button / restore chip should not
+     overlap the auth area: allow wrapping and slim the horizontal paddings. */
+  .header-right {
+    gap: 8px;
+  }
+  .header {
+    padding: 0 12px;
+  }
+  .nav-link {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .set-page .kb-legend {
+    max-width: 100%;
+  }
 }
 
 .fs-controls { display: flex; gap: 16px; }

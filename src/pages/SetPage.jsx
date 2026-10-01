@@ -1603,6 +1603,11 @@ export default function SetPage() {
 
   // Display order of card indices for the current pass of cards mode.
   // Computed once on entry / restart, then fixed for the whole pass.
+  // K17: the cards-mode control panel (deck-toolbar) is a compact collapsible
+  // row; default to shown so the card is unobstructed but the panel can be
+  // tucked away when the user wants maximum card space.
+  const [toolbarOpen, setToolbarOpen] = useState(true)
+
   const [order, setOrder] = useState(() => {
     if (!set) return []
     const base = set.cards.map((_, i) => i)
@@ -2009,8 +2014,6 @@ export default function SetPage() {
         </button>
       </div>
 
-      <KeyboardLegend />
-
       <div className="mode-stage">
       {count === 0 ? (
         <div className="test-placeholder">
@@ -2040,6 +2043,18 @@ export default function SetPage() {
       ) : (
         <div className="deck">
           <div className="deck-toolbar">
+            <button
+              type="button"
+              className="deck-toolbar-toggle"
+              onClick={() => setToolbarOpen((o) => !o)}
+              title={toolbarOpen ? 'Свернуть панель управления' : 'Показать панель управления'}
+              aria-expanded={toolbarOpen}
+              data-testid="toolbar-toggle"
+            >
+              <span aria-hidden="true">⚙</span>
+              <span className="toolbar-chevron">{toolbarOpen ? '▾' : '▸'}</span>
+            </button>
+            {toolbarOpen && (<>
             <label className="priority-toggle">
               <input
                 type="checkbox"
@@ -2089,43 +2104,45 @@ export default function SetPage() {
             <button type="button" className="btn btn-outline" onClick={restart}>
               Заново
             </button>
-          </div>
-
-          <div className="card-actions">
-            <button
-              type="button"
-              className="btn-icon"
-              title="Озвучить"
-              onClick={() => speakEnglish(current.word)}
-              data-testid="speak-btn"
-            >
-              🔊
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
-              onClick={() => toggleStar(currentIndex)}
-              data-testid="star-btn"
-            >
-              {isStarred(currentIndex) ? '★' : '☆'}
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Полный экран"
-              onClick={() => setFullscreen(true)}
-              data-testid="fullscreen-btn"
-            >
-              ⛶
-            </button>
+            </>)}
           </div>
 
           <div className="flashcard-wrap">
-            <span className="view-badge">Показов: {getViews(id, currentIndex)}</span>
             {currentIndex >= 0 && isDueOn(id, currentIndex, todayStr()) && (
               <span className="review-badge">к повторению</span>
             )}
+            {/* K17 (A5): the 🔊/★/⛶ action buttons sit on the card, centered
+                between the left review marker and the right views badge. */}
+            <div className="card-actions">
+              <button
+                type="button"
+                className="btn-icon"
+                title="Озвучить"
+                onClick={() => speakEnglish(current.word)}
+                data-testid="speak-btn"
+              >
+                🔊
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
+                onClick={() => toggleStar(currentIndex)}
+                data-testid="star-btn"
+              >
+                {isStarred(currentIndex) ? '★' : '☆'}
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title="Полный экран"
+                onClick={() => setFullscreen(true)}
+                data-testid="fullscreen-btn"
+              >
+                ⛶
+              </button>
+            </div>
+            <span className="view-badge">Показов: {getViews(id, currentIndex)}</span>
             <div
               className="flashcard-scene"
               role="button"
@@ -2152,6 +2169,10 @@ export default function SetPage() {
         </div>
       )}
       </div>{/* /mode-stage */}
+
+      {/* K17: the collapsible keyboard legend lives at the very BOTTOM of the
+          main area, below the tasks/stage, reachable in every mode. */}
+      <KeyboardLegend />
 
       </div>{/* /set-main */}
       {fullscreen && current && (
