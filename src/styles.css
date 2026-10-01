@@ -1560,6 +1560,269 @@ h1 {
   justify-content: center;
 }
 
+/* ---------- K11 folders / classes / leaderboards / AI ---------- */
+.set-head .k11-share {
+  margin-left: 12px;
+}
+
+.k11-share-msg {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.3);
+  color: var(--success);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.k11-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+  margin: 20px 0;
+}
+
+.k11-panel-title {
+  margin: 0 0 14px;
+  font-size: 19px;
+}
+
+.k11-lb-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.k11-lb h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.k11-lb-empty {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.k11-lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.k11-lb-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.k11-lb-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--bg);
+}
+
+.k11-lb-table td a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.k11-lb-val {
+  font-weight: 800;
+  color: var(--primary-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.k11-create-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.k11-input {
+  flex: 1;
+  min-width: 220px;
+  font-size: 15px;
+  padding: 10px 14px;
+}
+
+.k11-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.k11-filter-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.k11-filter-hint {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.k11-folder-list,
+.k11-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.k11-folder,
+.k11-class {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+}
+
+.k11-folder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.k11-folder-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.k11-folder-name strong {
+  font-size: 16px;
+}
+
+.k11-count {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.k11-folder-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.k11-edit-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.k11-folder-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+
+.k11-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 8px 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.k11-chip a {
+  color: var(--primary);
+}
+
+.k11-chip-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 50%;
+}
+
+.k11-chip-x:hover {
+  color: var(--danger);
+}
+
+.k11-folder-assign {
+  margin-top: 6px;
+}
+
+.k11-class-pick {
+  margin-top: 10px;
+}
+
+.k11-class-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.k11-class-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.k11-class-check input {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+
+.k11-ai {
+  background: linear-gradient(135deg, #eef4ff, #fafbff);
+  border: 1px solid #d8e4fb;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.k11-ai-actions {
+  flex-wrap: wrap;
+}
+
+.k11-ai-msg {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .k11-lb-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Fullscreen presentation overlay (in-app, robust). */
 .fs-overlay {
   position: fixed;

@@ -384,3 +384,152 @@ export function downloadProgressReport() {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+// ---------- K11 folders ----------
+// A folder groups several sets. Stored in localStorage as [{ id, name, setIds[] }].
+const FOLDER_KEY = 'fc_folders'
+
+export function loadFolders() {
+  try {
+    const raw = localStorage.getItem(FOLDER_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    console.error('Failed to load folders', e)
+    return []
+  }
+}
+
+export function saveFolders(folders) {
+  localStorage.setItem(FOLDER_KEY, JSON.stringify(folders))
+}
+
+export function addFolder(name) {
+  const folders = loadFolders()
+  const folder = { id: crypto.randomUUID(), name: name || 'Новая папка', setIds: [] }
+  folders.push(folder)
+  saveFolders(folders)
+  return folder
+}
+
+export function removeFolder(id) {
+  saveFolders(loadFolders().filter((f) => f.id !== id))
+}
+
+export function renameFolder(id, name) {
+  saveFolders(loadFolders().map((f) => (f.id === id ? { ...f, name } : f)))
+}
+
+export function folderAssignSet(folderId, setId) {
+  saveFolders(loadFolders().map((f) =>
+    f.id === folderId ? { ...f, setIds: f.setIds.includes(setId) ? f.setIds : [...f.setIds, setId] } : f
+  ))
+}
+
+export function folderUnassignSet(folderId, setId) {
+  saveFolders(loadFolders().map((f) =>
+    f.id === folderId ? { ...f, setIds: f.setIds.filter((s) => s !== setId) } : f
+  ))
+}
+
+// ---------- K11 classes (local) ----------
+// A "Класс" is a local-only group of sets: [{ id, name, setIds[] }].
+const CLASS_KEY = 'fc_classes'
+
+export function loadClasses() {
+  try {
+    const raw = localStorage.getItem(CLASS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    console.error('Failed to load classes', e)
+    return []
+  }
+}
+
+export function saveClasses(classes) {
+  localStorage.setItem(CLASS_KEY, JSON.stringify(classes))
+}
+
+export function addClass(name) {
+  const classes = loadClasses()
+  const cls = { id: crypto.randomUUID(), name: name || 'Новый класс', setIds: [] }
+  classes.push(cls)
+  saveClasses(classes)
+  return cls
+}
+
+export function removeClass(id) {
+  saveClasses(loadClasses().filter((c) => c.id !== id))
+}
+
+export function renameClass(id, name) {
+  saveClasses(loadClasses().map((c) => (c.id === id ? { ...c, name } : c)))
+}
+
+export function classSetMember(classId, setId) {
+  saveClasses(loadClasses().map((c) =>
+    c.id === classId ? { ...c, setIds: c.setIds.includes(setId) ? c.setIds : [...c.setIds, setId] } : c
+  ))
+}
+
+export function classSetUnmember(classId, setId) {
+  saveClasses(loadClasses().map((c) =>
+    c.id === classId ? { ...c, setIds: c.setIds.filter((s) => s !== setId) } : c
+  ))
+}
+
+// ---------- K11 Blast score records ----------
+// Best Blast scores, stored under "fc_blast_<setId>" = { score, date }. Kept
+// separate from "fc_records_<setId>" (which holds Match times) so the existing
+// Match getRecord/saveRecord semantics stay untouched.
+const BLAST_PREFIX = 'fc_blast_'
+
+function blastKey(setId) {
+  return BLAST_PREFIX + setId
+}
+
+export function getBlastScore(setId) {
+  try {
+    const raw = localStorage.getItem(blastKey(setId))
+    return raw ? JSON.parse(raw) : null
+  } catch (e) {
+    console.error('Failed to load blast score', e)
+    return null
+  }
+}
+
+// Persist `score` only if it beats the current best. Returns true on new best.
+export function saveBlastScore(setId, score) {
+  const prev = getBlastScore(setId)
+  if (prev && prev.score >= score) return false
+  try {
+    localStorage.setItem(blastKey(setId), JSON.stringify({ score, date: new Date().toISOString() }))
+  } catch (e) {
+    console.error('Failed to save blast score', e)
+    return false
+  }
+  return true
+}
+
+// ---------- K11 leaderboard aggregation ----------
+// Combine every set's Match best-time record (fc_records_<id>) and Blast best
+// score (fc_blast_<id>) into two top-5 lists: fastest Match times ascending and
+// highest Blast scores descending, each annotated with its owning set's topic.
+export function buildLeaderboard() {
+  const sets = loadSets()
+  const match = []
+  const blast = []
+  for (const s of sets) {
+    const topic = s.topic || 'Без названия'
+    const rec = getRecord(s.id)
+    if (rec && rec.ms != null) match.push({ setId: s.id, topic, ms: rec.ms, date: rec.date })
+    const b = getBlastScore(s.id)
+    if (b && b.score != null) blast.push({ setId: s.id, topic, score: b.score, date: b.date })
+  }
+  match.sort((a, b) => a.ms - b.ms)
+  blast.sort((a, b) => b.score - a.score)
+  return { match: match.slice(0, 5), blast: blast.slice(0, 5) }
+}

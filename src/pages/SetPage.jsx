@@ -4,7 +4,7 @@ import {
   getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
   resetSetProgress, downloadProgressReport, recordStudyDay,
-  getCardStarred, toggleCardStarred,
+  getCardStarred, toggleCardStarred, saveBlastScore,
 } from '../store.js'
 
 // ---------- K10 flashcard helpers ----------
@@ -1377,6 +1377,11 @@ function Blast({ set, id }) {
 
   const { applyResult } = useStatusTracker(id)
 
+  // K11: persist the best Blast score so it can appear on the leaderboard.
+  useEffect(() => {
+    if (phase === 'done') saveBlastScore(id, score)
+  }, [phase, id, score])
+
   const roundsPerLevel = (lvl) => Math.min(3 + lvl, n)
 
   const buildBlocks = (cardIdx, lvl) => {
@@ -1543,6 +1548,8 @@ export default function SetPage() {
   const [mode, setMode] = useState('cards')
   const [flipped, setFlipped] = useState(false)
   const [priority, setPriorityMode] = useState(readPriority)
+  // K11: "Поделиться" message (link + JSON copied to clipboard).
+  const [shareMsg, setShareMsg] = useState('')
 
   // K10: auto-speak + autoplay + filters + fullscreen states.
   const [autospeak, setAutospeak] = useState(readAutospeak)
@@ -1781,6 +1788,19 @@ export default function SetPage() {
     )
   }
 
+  // K11: copy the share link AND the set JSON to the clipboard.
+  const handleShare = async () => {
+    if (!set) return
+    const link = `https://${window.location.host}/#/set/${set.id}`
+    const payload = JSON.stringify(set)
+    try {
+      await navigator.clipboard.writeText(link + '\n' + payload)
+      setShareMsg('Ссылка и JSON набора скопированы в буфер обмена.')
+    } catch (e) {
+      setShareMsg('Не удалось скопировать (нужен доступ к буферу обмена).')
+    }
+  }
+
   if (!set) {
     return (
       <div className="page">
@@ -1798,6 +1818,10 @@ export default function SetPage() {
         <Link to="/" className="back-link">← Мои наборы</Link>
         <h1>{set.topic || 'Без названия'}</h1>
         <span className="set-count big">{set.cards.length} карточек</span>
+        <button type="button" className="btn btn-outline k11-share" onClick={handleShare} data-testid="share-btn">
+          🔗 Поделиться
+        </button>
+        {shareMsg && <div className="k11-share-msg" data-testid="share-msg">{shareMsg}</div>}
       </div>
 
       {set.lesson_meta && (set.lesson_meta.song || (set.lesson_meta.grammar && set.lesson_meta.grammar.length > 0)) && (
