@@ -1360,3 +1360,136 @@ h1 {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+
+/* ---------- K9 progress / spaced repetition ---------- */
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.k9-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 20px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
+}
+
+.set-memory {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 16px;
+  padding: 4px 12px;
+}
+
+.k9-progress {
+  margin: 20px 0;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.k9-progress-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.k9-stat {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.k9-stat.not-studied { color: var(--muted); }
+.k9-stat.learning { color: #b45309; background: #fffbeb; border-color: #fcd34d; }
+.k9-stat.mastered { color: var(--success); background: rgba(5, 150, 105, 0.1); border-color: #6ee7b7; }
+
+.k9-mastery-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.k9-mastery-bar {
+  flex: 1;
+  height: 12px;
+  border-radius: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.k9-mastery-fill {
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--primary), #22c55e);
+  transition: width 0.3s ease;
+}
+
+.k9-mastery-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.k9-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  filter: brightness(0.92);
+}
+
+.review-badge {
+  position: absolute;
+  top: -12px;
+  left: 8px;
+  z-index: 5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.review-badge.inline {
+  position: static;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.no-reviews h2 {
+  margin-bottom: 8px;
+}

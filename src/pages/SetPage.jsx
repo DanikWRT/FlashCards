@@ -1,6 +1,10 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView, getRecord, saveRecord } from '../store.js'
+import {
+  getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
+  getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
+  resetSetProgress, downloadProgressReport, recordStudyDay,
+} from '../store.js'
 
 // ---------- Test mode helpers ----------
 
@@ -630,23 +634,47 @@ function MatchingQuestion({ q, feedback, pairs, setPairs, selLeft, setSelLeft, o
 const STATUS_RANK = { learning: 0, not_studied: 1, mastered: 2 }
 
 function adaptiveOrder(id, cards) {
-  const stats = getStats(id)
   const statuses = getStatuses(id)
   const idxs = cards.map((_, i) => i)
   return [...idxs].sort((a, b) => {
     const ra = STATUS_RANK[statuses[String(a)] || 'not_studied']
     const rb = STATUS_RANK[statuses[String(b)] || 'not_studied']
     if (ra !== rb) return ra - rb
-    const va = stats[String(a)] || 0
-    const vb = stats[String(b)] || 0
+    const va = getViews(id, a)
+    const vb = getViews(id, b)
     if (va !== vb) return va - vb
     return a - b
   })
 }
 
-// Initial work queue excludes cards already mastered in a previous session.
+// K9 spaced-repetition review order: cards due at-or-before today come first
+// (with the 'к повторению' marker), the rest follow — each group keeping the
+// adaptive (K6) ordering inside it.
+function reviewOrder(id, cards) {
+  const statuses = getStatuses(id)
+  const idxs = cards.map((_, i) => i)
+  return [...idxs].sort((a, b) => {
+    const da = isDueOn(id, a, todayStr()) ? 0 : 1
+    const db = isDueOn(id, b, todayStr()) ? 0 : 1
+    if (da !== db) return da - db
+    const ra = STATUS_RANK[statuses[String(a)] || 'not_studied']
+    const rb = STATUS_RANK[statuses[String(b)] || 'not_studied']
+    if (ra !== rb) return ra - rb
+    const va = getViews(id, a)
+    const vb = getViews(id, b)
+    if (va !== vb) return va - vb
+    return a - b
+  })
+}
+
+// Initial work queue excludes mastered cards and is ordered for K9 reviews.
 function initialQueue(id, cards) {
-  return adaptiveOrder(id, cards).filter((i) => getStatus(id, i) !== 'mastered')
+  return reviewOrder(id, cards).filter((i) => getStatus(id, i) !== 'mastered')
+}
+
+// Number of cards due at-or-before today (drives the 'no reviews today' screen).
+function dueCount(id, cards) {
+  return cards.reduce((acc, _, i) => acc + (isDueOn(id, i, todayStr()) ? 1 : 0), 0)
 }
 
 function countMastered(id, cards) {
@@ -665,13 +693,17 @@ function useStudySession(set, id) {
   const [streaks, setStreaks] = useState({})
   const [masteredCount, setMasteredCount] = useState(() => countMastered(id, cards))
   const [running, setRunning] = useState(queue.length > 0)
+  const [startedWithDue, setStartedWithDue] = useState(() => dueCount(id, cards) > 0)
 
   const idx = running && queue.length ? queue[0] : -1
   const card = idx >= 0 ? cards[idx] : null
 
-  // Apply a correct/wrong result to the current card's status + streak. Returns true if mastered.
+  // Apply a correct/wrong result to the current card's status + streak,
+  // plus the K9 spaced-repetition schedule and daily study mark.
   const applyResult = (correct) => {
     const i = queue[0]
+    recordStudyDay()
+    applySrsAnswer(id, i, correct)
     const s = { ...streaks }
     if (correct) {
       const ns = (s[i] || 0) + 1
@@ -704,14 +736,17 @@ function useStudySession(set, id) {
   }
 
   const restart = () => {
+    const q = initialQueue(id, cards)
     setStreaks({})
-    setQueue(initialQueue(id, cards))
-    setRunning(initialQueue(id, cards).length > 0)
+    setQueue(q)
+    setRunning(q.length > 0)
+    setStartedWithDue(dueCount(id, cards) > 0)
     setMasteredCount(countMastered(id, cards))
   }
 
   return {
-    direction, setDirection, idx, card, masteredCount, n, running, applyResult, advance, restart,
+    direction, setDirection, idx, card, masteredCount, n, running, startedWithDue,
+    applyResult, advance, restart,
   }
 }
 
@@ -767,6 +802,19 @@ function StudyDone({ label, onRestart }) {
   )
 }
 
+// K9: no cards due today -> spaced-repetition "done for the day" screen.
+function NoReviews({ onRestart }) {
+  return (
+    <div className="quiz quiz-result no-reviews" data-testid="no-reviews">
+      <h2>Повторений на сегодня нет</h2>
+      <p className="quiz-result-pct">Вы закончили повторения на сегодня. Возвращайтесь завтра! ✨</p>
+      <button type="button" className="btn btn-primary" onClick={onRestart}>
+        Проверить снова
+      </button>
+    </div>
+  )
+}
+
 // K6 LEARN (adaptive multiple choice) -------------------------------------------
 function Learn({ set, id }) {
   const s = useStudySession(set, id)
@@ -800,6 +848,12 @@ function Learn({ set, id }) {
     setResult(null)
   }
 
+  if (masteredCount >= n) {
+    return <StudyDone label="Обучение завершено" onRestart={s.restart} />
+  }
+  if (!s.startedWithDue) {
+    return <NoReviews onRestart={s.restart} />
+  }
   if (!running) {
     return <StudyDone label="Обучение завершено" onRestart={s.restart} />
   }
@@ -813,6 +867,7 @@ function Learn({ set, id }) {
         <span className="face-label">{direction === 'en-ru' ? 'EN · Слово' : 'RU · Перевод'}</span>
         <h2 className="quiz-word study-prompt">{prompt}</h2>
         <span className="study-status">{getStatus(id, s.idx)}</span>
+        {isDueOn(id, s.idx, todayStr()) && <span className="review-badge inline">к повторению</span>}
       </div>
 
       <div className="quiz-choices">
@@ -1085,6 +1140,8 @@ function Spell({ set, id }) {
 function useStatusTracker(setId) {
   const [streaks, setStreaks] = useState({})
   const applyResult = (cardIndex, correct) => {
+    recordStudyDay()
+    applySrsAnswer(setId, cardIndex, correct)
     setStreaks((s) => {
       const prev = s[String(cardIndex)] || 0
       const next = correct ? prev + 1 : 0
@@ -1426,22 +1483,40 @@ export default function SetPage() {
   const [order, setOrder] = useState(() => {
     if (!set) return []
     const base = set.cards.map((_, i) => i)
-    if (!readPriority()) return base
-    const stats = getStats(id)
-    // Stable sort in modern JS keeps equal-count cards in original order.
-    return [...base].sort((a, b) => (stats[String(a)] || 0) - (stats[String(b)] || 0))
+    // K9: cards due today come first, then adaptive priority order.
+    return [...base].sort((a, b) => {
+      const da = isDueOn(id, a, todayStr()) ? 0 : 1
+      const db = isDueOn(id, b, todayStr()) ? 0 : 1
+      if (da !== db) return da - db
+      if (readPriority()) {
+        const va = getViews(id, a)
+        const vb = getViews(id, b)
+        if (va !== vb) return va - vb
+      }
+      return a - b
+    })
   })
   const [pos, setPos] = useState(0)
 
   const count = set ? set.cards.length : 0
+  const cardsDue = set ? dueCount(id, set.cards) : 0
 
-  // Recompute the display order for a given priority mode (stable sort).
+  // K9 review-first display order used in cards mode (due cards first, then
+  // per the K4 priority setting which sorts by fewest views first).
   const computeOrder = (usePriority) => {
     if (!set) return []
     const base = set.cards.map((_, i) => i)
-    if (!usePriority) return base
-    const stats = getStats(id)
-    return [...base].sort((a, b) => (stats[String(a)] || 0) - (stats[String(b)] || 0))
+    return [...base].sort((a, b) => {
+      const da = isDueOn(id, a, todayStr()) ? 0 : 1
+      const db = isDueOn(id, b, todayStr()) ? 0 : 1
+      if (da !== db) return da - db
+      if (usePriority) {
+        const va = getViews(id, a)
+        const vb = getViews(id, b)
+        if (va !== vb) return va - vb
+      }
+      return a - b
+    })
   }
 
   // When switching INTO cards mode (e.g. from test), recompute a fresh pass.
@@ -1471,10 +1546,14 @@ export default function SetPage() {
   }
 
   // View counter: increments for the currently displayed ORIGINAL card index.
+  // Only counts a real view when the deck is actually shown (cards mode with at
+  // least one card due today). Also marks the day as studied.
   useEffect(() => {
     if (currentIndex < 0 || !current) return
+    if (mode !== 'cards' || cardsDue === 0) return
+    recordStudyDay()
     recordCardView(id, currentIndex)
-  }, [id, currentIndex, current])
+  }, [id, currentIndex, current, mode, cardsDue])
 
   // "Заново": reset to the start of the pass and recompute the order once.
   const restart = () => applyOrder(priority)
@@ -1518,6 +1597,49 @@ export default function SetPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [count])
 
+  // K9: progress overview (X из N per status), mastery bar, reset + report.
+  const ProgressOverview = () => {
+    const n = count
+    const statuses = getStatuses(id)
+    let mastered = 0
+    let learning = 0
+    let notStudied = 0
+    for (let i = 0; i < n; i++) {
+      const s = statuses[String(i)] || 'not_studied'
+      if (s === 'mastered') mastered += 1
+      else if (s === 'learning') learning += 1
+      else notStudied += 1
+    }
+    const pct = n ? Math.round((mastered / n) * 100) : 0
+    const handleReset = () => {
+      if (typeof window !== 'undefined' && !window.confirm('Сбросить весь прогресс по этому набору?')) return
+      resetSetProgress(id)
+      setMode('cards')
+      setOrder(computeOrder(priority))
+      setPos(0)
+      setFlipped(false)
+    }
+    return (
+      <div className="k9-progress" data-testid="k9-progress">
+        <div className="k9-progress-stats">
+          <span className="k9-stat not-studied">Не изучено: {notStudied} из {n}</span>
+          <span className="k9-stat learning">В процессе: {learning} из {n}</span>
+          <span className="k9-stat mastered">Освоено: {mastered} из {n}</span>
+        </div>
+        <div className="k9-mastery-wrap">
+          <div className="k9-mastery-bar">
+            <div className="k9-mastery-fill" style={{ width: pct + '%' }} />
+          </div>
+          <span className="k9-mastery-label">Освоено {mastered} из {n} · {pct}%</span>
+        </div>
+        <div className="k9-progress-actions">
+          <button type="button" className="btn btn-outline" onClick={downloadProgressReport}>Скачать отчёт</button>
+          <button type="button" className="btn btn-danger" onClick={handleReset}>Сбросить прогресс</button>
+        </div>
+      </div>
+    )
+  }
+
   if (!set) {
     return (
       <div className="page">
@@ -1552,6 +1674,8 @@ export default function SetPage() {
           )}
         </div>
       )}
+
+      <ProgressOverview />
 
       <div className="mode-switcher" role="tablist" aria-label="Режим просмотра">
         <button
@@ -1647,6 +1771,8 @@ export default function SetPage() {
         <Learn set={set} id={id} />
       ) : mode === 'write' ? (
         <Write set={set} id={id} />
+      ) : cardsDue === 0 ? (
+        <NoReviews onRestart={restart} />
       ) : (
         <div className="deck">
           <div className="deck-toolbar">
@@ -1664,7 +1790,10 @@ export default function SetPage() {
           </div>
 
           <div className="flashcard-wrap">
-            <span className="view-badge">Показов: {(getStats(id)[String(currentIndex)] || 0)}</span>
+            <span className="view-badge">Показов: {getViews(id, currentIndex)}</span>
+            {currentIndex >= 0 && isDueOn(id, currentIndex, todayStr()) && (
+              <span className="review-badge">к повторению</span>
+            )}
             <div
               className="flashcard-scene"
               role="button"
