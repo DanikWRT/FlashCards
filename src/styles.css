@@ -1559,13 +1559,14 @@ h1 {
 }
 
 /* ---------- K10 flashcard extras ---------- */
+/* K16: the three round control buttons (sound / star / fullscreen) sit on a
+   dedicated row ABOVE the flashcards. Positioned in normal flow (not absolute),
+   so they never overlap the red view/review badges on the card corners. */
 .card-actions {
-  position: absolute;
-  top: -16px;
-  left: 0;
-  z-index: 6;
   display: flex;
   gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
 .btn-icon {
@@ -2005,6 +2006,18 @@ h1 {
 .mode-stage > .test-placeholder {
   width: 100%;
   margin: 0;
+}
+
+/* ---------- K16 Set page: shift the layout left + center the tasks ----------
+   The default `.main` container (max-width 980px, margin:0 auto) centers the
+   whole two-panel block, which pushes the sidebar too far right and makes the
+   card area feel off-center. For the set page we widen the container and pin it
+   toward the left edge so the left info panel starts near the viewport's left,
+   while the wider main area lets the cards/tasks sit truly centered. */
+.main:has(.set-page) {
+  max-width: 1240px;
+  margin-left: max(16px, calc((100vw - 1240px) / 2));
+  margin-right: 16px;
 }
 
 /* ---------- Responsive: sidebar collapses to a full-width header on mobile ---------- */

@@ -1899,7 +1899,7 @@ export default function SetPage() {
   }
 
   return (
-    <div className="page set-layout">
+    <div className="page set-layout set-page">
       <aside className="set-sidebar">
       <div className="set-head">
         <Link to="/" className="back-link">← Мои наборы</Link>
@@ -2091,40 +2091,41 @@ export default function SetPage() {
             </button>
           </div>
 
+          <div className="card-actions">
+            <button
+              type="button"
+              className="btn-icon"
+              title="Озвучить"
+              onClick={() => speakEnglish(current.word)}
+              data-testid="speak-btn"
+            >
+              🔊
+            </button>
+            <button
+              type="button"
+              className="btn-icon"
+              title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
+              onClick={() => toggleStar(currentIndex)}
+              data-testid="star-btn"
+            >
+              {isStarred(currentIndex) ? '★' : '☆'}
+            </button>
+            <button
+              type="button"
+              className="btn-icon"
+              title="Полный экран"
+              onClick={() => setFullscreen(true)}
+              data-testid="fullscreen-btn"
+            >
+              ⛶
+            </button>
+          </div>
+
           <div className="flashcard-wrap">
             <span className="view-badge">Показов: {getViews(id, currentIndex)}</span>
             {currentIndex >= 0 && isDueOn(id, currentIndex, todayStr()) && (
               <span className="review-badge">к повторению</span>
             )}
-            <div className="card-actions">
-              <button
-                type="button"
-                className="btn-icon"
-                title="Озвучить"
-                onClick={() => speakEnglish(current.word)}
-                data-testid="speak-btn"
-              >
-                🔊
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
-                onClick={() => toggleStar(currentIndex)}
-                data-testid="star-btn"
-              >
-                {isStarred(currentIndex) ? '★' : '☆'}
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title="Полный экран"
-                onClick={() => setFullscreen(true)}
-                data-testid="fullscreen-btn"
-              >
-                ⛶
-              </button>
-            </div>
             <div
               className="flashcard-scene"
               role="button"
