@@ -1,3 +1,19 @@
+// ---------- K13 per-user progress binding ----------
+// When a user is logged in their personal study progress is stored under a
+// <username>_ prefix (e.g. fc_stats_<username>_<setId>). When logged out the
+// original unprefixed keys are used, preserving current behavior.
+
+let progressUser = null
+
+// Set the active username for progress key binding (null = logged out).
+export function setProgressUser(username) {
+  progressUser = username || null
+}
+
+function userPrefix() {
+  return progressUser ? progressUser + '_' : ''
+}
+
 // Local storage store for FC sets (key: "fc_sets")
 
 const STORAGE_KEY = 'fc_sets'
@@ -145,10 +161,8 @@ export async function deleteSetShared(id) {
 }
 
 // Per-set view counters, stored under "fc_stats_<setId>" keyed by card index.
-const STATS_PREFIX = 'fc_stats_'
-
 function statsKey(setId) {
-  return STATS_PREFIX + setId
+  return 'fc_stats_' + userPrefix() + setId
 }
 
 export function getStats(setId) {
@@ -165,10 +179,8 @@ export function getStats(setId) {
 // index (flat dict, e.g. {"0":"learning","1":"mastered"}). Kept in the same
 // local-storage family as the view counters (fc_stats_*) so counters and study
 // status stay together conceptually without changing counter semantics.
-const STATUS_PREFIX = 'fc_status_'
-
 function statusKey(setId) {
-  return STATUS_PREFIX + setId
+  return 'fc_status_' + userPrefix() + setId
 }
 
 export function getStatuses(setId) {
@@ -203,10 +215,8 @@ export function setCardStatus(setId, index, status) {
 
 // Per-set best-time records for the Match mode, stored under "fc_records_<setId>".
 // Value is { ms, date } where ms is the best elapsed time in milliseconds.
-const RECORD_PREFIX = 'fc_records_'
-
 function recordKey(setId) {
-  return RECORD_PREFIX + setId
+  return 'fc_records_' + userPrefix() + setId
 }
 
 export function getRecord(setId) {
@@ -367,7 +377,9 @@ export function toggleCardStarred(setId, index) {
 
 // ---------- K9 spaced repetition & progress ----------
 
-const DAILY_KEY = 'fc_daily_stats'
+function dailylKey() {
+  return 'fc_daily_stats_' + userPrefix()
+}
 const REVIEW_LADDER = [1, 3, 7, 15, 30, 60, 120]
 
 // Local-calendar date as YYYY-MM-DD (the timezone the user studies in).
@@ -405,9 +417,9 @@ export function resetSetProgress(setId) {
 export function recordStudyDay() {
   const today = todayStr()
   try {
-    const map = JSON.parse(localStorage.getItem(DAILY_KEY) || '{}')
+    const map = JSON.parse(localStorage.getItem(dailylKey()) || '{}')
     map[today] = true
-    localStorage.setItem(DAILY_KEY, JSON.stringify(map))
+    localStorage.setItem(dailylKey(), JSON.stringify(map))
   } catch (e) {
     console.error('Failed to save daily stats', e)
   }
@@ -417,7 +429,7 @@ export function recordStudyDay() {
 export function getDayStreak() {
   let map = {}
   try {
-    map = JSON.parse(localStorage.getItem(DAILY_KEY) || '{}')
+    map = JSON.parse(localStorage.getItem(dailylKey()) || '{}')
   } catch (e) {
     map = {}
   }
@@ -595,10 +607,8 @@ export function classSetUnmember(classId, setId) {
 // Best Blast scores, stored under "fc_blast_<setId>" = { score, date }. Kept
 // separate from "fc_records_<setId>" (which holds Match times) so the existing
 // Match getRecord/saveRecord semantics stay untouched.
-const BLAST_PREFIX = 'fc_blast_'
-
 function blastKey(setId) {
-  return BLAST_PREFIX + setId
+  return 'fc_blast_' + userPrefix() + setId
 }
 
 export function getBlastScore(setId) {

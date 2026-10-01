@@ -79,6 +79,70 @@ a {
   padding: 32px 24px 64px;
 }
 
+/* ---------- K13 auth ---------- */
+.auth-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-user {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal {
+  width: min(360px, 92vw);
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.modal-label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;

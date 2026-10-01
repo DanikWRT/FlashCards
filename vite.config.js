@@ -13,6 +13,8 @@ export default defineConfig({
     //   /api/ai   -> K11 AI proxy (:5198)
     proxy: {
       '/api/sets': 'http://localhost:5199',
+      '/api/auth': 'http://localhost:5199',
+      '/api/me': 'http://localhost:5199',
       '/api/ai': 'http://localhost:5198',
     },
   },

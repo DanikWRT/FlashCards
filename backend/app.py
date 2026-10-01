@@ -18,11 +18,17 @@ GET    /api/sets/{id}   -> a single set object
 POST   /api/sets        -> create {topic, lesson_meta, cards} -> {id, ok:true}
 PUT    /api/sets/{id}   -> update -> {id, ok:true}
 DELETE /api/sets/{id}   -> delete -> {ok:true}
+POST   /api/auth/register {username,password} -> {token, username} (409 if taken)
+POST   /api/auth/login    {username,password} -> {token, username} (401 bad creds)
+POST   /api/auth/logout   Bearer token        -> {ok:true}
+GET    /api/me            Bearer token        -> {username} (401 if invalid)
 anything else           -> static file from dist/ (else index.html SPA fallback)
 """
 
+import hashlib
 import json
 import os
+import secrets
 import sqlite3
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -70,7 +76,7 @@ def get_conn():
 
 
 def init_db():
-    """Create the DB file's parent dir and the `sets` table if missing."""
+    """Create the DB file's parent dir and all tables if missing."""
     parent = os.path.dirname(DB_PATH)
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -83,9 +89,38 @@ def init_db():
             "created TEXT"
             ")"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS fc_users ("
+            "username TEXT PRIMARY KEY, "
+            "password_hash TEXT, "
+            "created TEXT"
+            ")"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS fc_sessions ("
+            "token TEXT PRIMARY KEY, "
+            "username TEXT, "
+            "created TEXT"
+            ")"
+        )
         conn.commit()
     finally:
         conn.close()
+
+
+def _hash_password(password, salt):
+    """PBKDF2-HMAC-SHA256 hash of password with the given per-user salt hex."""
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt), 100_000
+    ).hex()
+
+
+def _new_salt():
+    return secrets.token_hex(16)
+
+
+def _new_token():
+    return secrets.token_hex(32)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -187,10 +222,68 @@ class Handler(BaseHTTPRequestHandler):
             "cards": obj.get("cards", []) if isinstance(obj, dict) else [],
         }
 
+    # ---------------- auth helpers ----------------
+
+    def _auth_bearer(self):
+        """Return the Bearer token from the Authorization header, or None."""
+        auth = self.headers.get("Authorization") or ""
+        if auth.startswith("Bearer "):
+            return auth[len("Bearer "):].strip() or None
+        return None
+
+    def _acting_user(self):
+        """Resolve the username for a valid Bearer session token, else None."""
+        token = self._auth_bearer()
+        if not token:
+            return None
+        conn = get_conn()
+        try:
+            row = conn.execute(
+                "SELECT username FROM fc_sessions WHERE token=?", (token,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return row["username"] if row else None
+
+    def _auth_creds(self):
+        """Validate {username,password} from the JSON body."""
+        body = self._read_json_body()
+        if not isinstance(body, dict):
+            return None, None
+        username = body.get("username")
+        password = body.get("password")
+        if (
+            not isinstance(username, str) or not username.strip()
+            or not isinstance(password, str) or not password
+        ):
+            return None, None
+        return username, password
+
+    def _issue_session(self, username):
+        """Create a new session row and return its token."""
+        token = _new_token()
+        conn = get_conn()
+        try:
+            conn.execute(
+                "INSERT INTO fc_sessions (token, username, created) VALUES (?, ?, ?)",
+                (token, username, _now()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return token
+
     # ---------------- methods ----------------
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/api/me":
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            self._send_json(200, {"username": username})
+            return
         if path == "/api/sets":
             conn = get_conn()
             try:
@@ -217,6 +310,65 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if path == "/api/auth/register":
+            username, password = self._auth_creds()
+            if username is None:
+                self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            conn = get_conn()
+            try:
+                taken = conn.execute(
+                    "SELECT 1 FROM fc_users WHERE username=?", (username,)
+                ).fetchone()
+                if taken is not None:
+                    self._send_json(409, {"ok": False, "error": "username taken"})
+                    return
+                salt = _new_salt()
+                conn.execute(
+                    "INSERT INTO fc_users (username, password_hash, created) VALUES (?, ?, ?)",
+                    (username, salt + ":" + _hash_password(password, salt), _now()),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            token = self._issue_session(username)
+            self._send_json(200, {"token": token, "username": username})
+            return
+        if path == "/api/auth/login":
+            username, password = self._auth_creds()
+            if username is None:
+                self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            conn = get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT password_hash FROM fc_users WHERE username=?", (username,)
+                ).fetchone()
+            finally:
+                conn.close()
+            ok = False
+            if row is not None:
+                stored = row["password_hash"]
+                if ":" in stored:
+                    salt, digest = stored.split(":", 1)
+                    ok = _hash_password(password, salt) == digest
+            if not ok:
+                self._send_json(401, {"ok": False, "error": "bad credentials"})
+                return
+            token = self._issue_session(username)
+            self._send_json(200, {"token": token, "username": username})
+            return
+        if path == "/api/auth/logout":
+            token = self._auth_bearer()
+            if token:
+                conn = get_conn()
+                try:
+                    conn.execute("DELETE FROM fc_sessions WHERE token=?", (token,))
+                    conn.commit()
+                finally:
+                    conn.close()
+            self._send_json(200, {"ok": True})
+            return
         if path != "/api/sets":
             self._send_json(404, {"ok": False, "error": "not found"})
             return
