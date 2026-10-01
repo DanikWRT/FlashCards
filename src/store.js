@@ -215,6 +215,46 @@ export function applySrsAnswer(setId, index, correct) {
   }
 }
 
+// ---------- K10 starred cards ----------
+// A card flagged as important. Stored inside the fc_stats_<id> object under the
+// reserved "_stars" map (index -> true), mirroring the "_srs" reserved key so it
+// survives recordCardView (which only touches the bare per-index view count).
+function readStars(stats) {
+  return stats && stats._stars && typeof stats._stars === 'object' ? stats._stars : {}
+}
+
+// True when the card at `index` is marked important.
+export function getCardStarred(setId, index) {
+  return readStars(getStats(setId))[String(index)] === true
+}
+
+// Set/unset the important flag for the card at `index`, persisted in fc_stats_.
+export function setCardStarred(setId, index, starred) {
+  const key = statsKey(setId)
+  let stats = {}
+  try {
+    stats = JSON.parse(localStorage.getItem(key) || '{}')
+  } catch (e) {
+    stats = {}
+  }
+  const stars = readStars(stats)
+  if (starred) stars[String(index)] = true
+  else delete stars[String(index)]
+  stats._stars = stars
+  try {
+    localStorage.setItem(key, JSON.stringify(stats))
+  } catch (e) {
+    console.error('Failed to save stars', e)
+  }
+}
+
+// Flip the important flag for a card; returns the new value.
+export function toggleCardStarred(setId, index) {
+  const cur = getCardStarred(setId, index)
+  setCardStarred(setId, index, !cur)
+  return !cur
+}
+
 // ---------- K9 spaced repetition & progress ----------
 
 const DAILY_KEY = 'fc_daily_stats'

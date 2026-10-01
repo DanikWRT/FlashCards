@@ -1493,3 +1493,128 @@ h1 {
 .no-reviews h2 {
   margin-bottom: 8px;
 }
+
+/* ---------- K10 flashcard extras ---------- */
+.card-actions {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+}
+.btn-icon:hover {
+  background: var(--bg);
+  transform: translateY(-1px);
+}
+
+.card-image {
+  max-width: 220px;
+  max-height: 150px;
+  width: auto; height: auto;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.keys-hints {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  user-select: none;
+}
+
+.deck-toolbar select {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.study-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Fullscreen presentation overlay (in-app, robust). */
+.fs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px;
+}
+.fs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.fs-toolbar .btn-icon {
+  background: #1e293b;
+  border-color: #334155;
+  color: #fff;
+}
+.fs-toolbar .btn-icon:hover { background: #334155; }
+.fs-progress {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 140px;
+  text-align: center;
+}
+.fs-exit { border-color: #334155; color: #e2e8f0; }
+.fs-card-scene {
+  width: min(680px, 100%);
+  height: 430px;
+  perspective: 1400px;
+  cursor: pointer;
+}
+.fs-card-scene .flashcard {
+  width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.6s ease;
+}
+.fs-card-scene .flashcard.flipped { transform: rotateY(180deg); }
+.fs-card-scene .flashcard-face {
+  background: #1e293b;
+  border-color: #334155;
+}
+.fs-card-scene .flashcard-face .face-label { color: #94a3b8; }
+.fs-card-scene .flashcard-face .face-word { color: #fff; font-size: 54px; }
+.fs-card-scene .flashcard-face .back-translation { color: #7dd3fc; font-size: 32px; }
+.fs-card-scene .flashcard-face .face-hint { color: #64748b; }
+.fs-card-scene .card-image { border-color: #334155; }
+.fs-controls { display: flex; gap: 16px; }
+.fs-controls .btn { font-size: 22px; padding: 10px 24px; }
+.fs-controls .btn:disabled { opacity: 0.4; cursor: not-allowed; }

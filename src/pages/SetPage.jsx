@@ -4,9 +4,49 @@ import {
   getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
   resetSetProgress, downloadProgressReport, recordStudyDay,
+  getCardStarred, toggleCardStarred,
 } from '../store.js'
 
-// ---------- Test mode helpers ----------
+// ---------- K10 flashcard helpers ----------
+
+// Optional card image (K7 acceptance: a card MAY have an 'image' URL field).
+// Renders <img> with an onError fallback so a broken URL never breaks the deck.
+function CardImage({ src }) {
+  const [err, setErr] = useState(false)
+  if (!src || err) return null
+  return <img className="card-image" src={src} alt="" onError={() => setErr(true)} />
+}
+
+// Front (English word) face — shared by the normal deck and fullscreen viewer.
+function CardFront({ card }) {
+  return (
+    <div className="flashcard-face front">
+      <span className="face-label">EN · Слово</span>
+      {card.image && <CardImage src={card.image} />}
+      <h2 className="face-word">{card.word}</h2>
+      <span className="face-hint">Нажмите, чтобы перевернуть</span>
+    </div>
+  )
+}
+
+// Back (Russian translation + extras) face — shared by both viewers.
+function CardBack({ card }) {
+  return (
+    <div className="flashcard-face back">
+      <span className="face-label">RU · Перевод</span>
+      <h3 className="back-translation">{card.translation}</h3>
+      {card.examples && card.examples[0] && (
+        <div className="back-example">
+          <p className="ex-en">{card.examples[0].en}</p>
+          <p className="ex-ru">{card.examples[0].ru}</p>
+        </div>
+      )}
+      {card.family && (
+        <p className="back-family"><strong>Родственные формы:</strong> {card.family}</p>
+      )}
+    </div>
+  )
+}
 
 function shuffle(arr) {
   const a = [...arr]
@@ -744,9 +784,12 @@ function useStudySession(set, id) {
     setMasteredCount(countMastered(id, cards))
   }
 
+  // K10: randomize the work order for the current pass (keeps the queue intact).
+  const shuffleNow = () => setQueue((q) => (q.length ? shuffle(q) : q))
+
   return {
     direction, setDirection, idx, card, masteredCount, n, running, startedWithDue,
-    applyResult, advance, restart,
+    applyResult, advance, restart, shuffleNow,
   }
 }
 
@@ -860,7 +903,12 @@ function Learn({ set, id }) {
 
   return (
     <div className="quiz study">
-      <StudyDirection direction={direction} setDirection={setDirection} />
+      <div className="study-toolbar">
+        <StudyDirection direction={direction} setDirection={setDirection} />
+        <button type="button" className="btn btn-outline" onClick={s.shuffleNow} title="Перемешать порядок">
+          🔀 Перемешать
+        </button>
+      </div>
       <StudyProgress mastered={masteredCount} total={n} />
 
       <div className="quiz-card">
@@ -1471,12 +1519,38 @@ function readPriority() {
   return localStorage.getItem(PRIORITY_KEY) !== 'off' // default to 'on'
 }
 
+// K10 settings persisted in localStorage.
+const AUTOSPEAK_KEY = 'fc_autospeak'
+const PLAY_INTERVAL_KEY = 'fc_play_interval'
+
+function readAutospeak() {
+  return localStorage.getItem(AUTOSPEAK_KEY) === '1'
+}
+function persistAutospeak(v) {
+  localStorage.setItem(AUTOSPEAK_KEY, v ? '1' : '0')
+}
+function readPlayInterval() {
+  const v = Number(localStorage.getItem(PLAY_INTERVAL_KEY))
+  return [3, 5, 10].includes(v) ? v : 5
+}
+function persistPlayInterval(v) {
+  localStorage.setItem(PLAY_INTERVAL_KEY, String(v))
+}
+
 export default function SetPage() {
   const { id } = useParams()
   const [set] = useState(() => getSet(id))
   const [mode, setMode] = useState('cards')
   const [flipped, setFlipped] = useState(false)
   const [priority, setPriorityMode] = useState(readPriority)
+
+  // K10: auto-speak + autoplay + filters + fullscreen states.
+  const [autospeak, setAutospeak] = useState(readAutospeak)
+  const [playInterval, setPlayInterval] = useState(readPlayInterval)
+  const [playing, setPlaying] = useState(false)
+  const [starredOnly, setStarredOnly] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [starVer, setStarVer] = useState(0)
 
   // Display order of card indices for the current pass of cards mode.
   // Computed once on entry / restart, then fixed for the whole pass.
@@ -1519,6 +1593,43 @@ export default function SetPage() {
     })
   }
 
+  // Apply the K4-priority sort and an optional starred-only filter to a base order.
+  const buildDisplayOrder = (usePriority, onlyStarred) => {
+    if (!set) return []
+    const ord = computeOrder(usePriority)
+    return onlyStarred ? ord.filter((i) => getCardStarred(id, i)) : ord
+  }
+
+  // K10: randomize the displayed order for the current cards pass.
+  const shuffleNow = () => {
+    setOrder(shuffle(buildDisplayOrder(priority, starredOnly)))
+    setPos(0)
+    setFlipped(false)
+  }
+
+  // K10: toggle the starred-only filter (drops unstarred cards from the pass).
+  const toggleStarredOnly = () => {
+    const next = !starredOnly
+    setStarredOnly(next)
+    setOrder(buildDisplayOrder(priority, next))
+    setPos(0)
+    setFlipped(false)
+  }
+
+  // K10: mark/unmark the current card as important, persisting to fc_stats_.
+  const toggleStar = (i) => {
+    toggleCardStarred(id, i)
+    setStarVer((v) => v + 1)
+    if (starredOnly) {
+      // In starred-only mode the card may drop out of the pass.
+      setOrder(buildDisplayOrder(priority, true))
+      setPos(0)
+      setFlipped(false)
+    }
+  }
+
+  const isStarred = (i) => getCardStarred(id, i)
+
   // When switching INTO cards mode (e.g. from test), recompute a fresh pass.
   // Guard with the previous mode so this does NOT fire on the initial mount
   // (which would re-sort after the first view was already counted, changing the
@@ -1526,7 +1637,7 @@ export default function SetPage() {
   const prevMode = useRef(mode)
   useEffect(() => {
     if (mode === 'cards' && prevMode.current !== 'cards') {
-      setOrder(computeOrder(priority))
+      setOrder(buildDisplayOrder(priority, starredOnly))
       setPos(0)
       setFlipped(false)
     }
@@ -1538,9 +1649,32 @@ export default function SetPage() {
   const currentIndex = set && order.length ? order[pos] : -1
   const current = set && currentIndex >= 0 ? set.cards[currentIndex] || null : null
 
-  // Reused by restart / toggle with the same compute logic.
+  // K10: auto-speak the shown word when a card is displayed (cards mode only).
+  useEffect(() => {
+    if (mode !== 'cards' || !autospeak || !current || fullscreen) return
+    speakEnglish(current.word)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, autospeak, currentIndex, fullscreen])
+
+  // K10: autoplay — advance the deck every playInterval seconds until the end.
+  useEffect(() => {
+    if (!playing || mode !== 'cards' || count === 0) return
+    const t = setInterval(() => {
+      setPos((p) => {
+        if (p >= count - 1) {
+          setPlaying(false)
+          return 0
+        }
+        return p + 1
+      })
+      setFlipped(false)
+    }, playInterval * 1000)
+    return () => clearInterval(t)
+  }, [playing, mode, count, playInterval])
+
+  // Reused by restart / toggle with the same compute logic (respects the filter).
   const applyOrder = (usePriority) => {
-    setOrder(computeOrder(usePriority))
+    setOrder(buildDisplayOrder(usePriority, starredOnly))
     setPos(0)
     setFlipped(false)
   }
@@ -1575,27 +1709,32 @@ export default function SetPage() {
     setFlipped(false)
   }
 
-  // Hotkeys: ArrowLeft/ArrowRight = prev/next, Space = flip.
+  // Hotkeys (cards mode): ArrowLeft/ArrowRight = prev/next, Space = flip,
+  // S = shuffle, P = play/pause. Ignored while typing in an input/textarea.
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+      if (mode !== 'cards') return
       if (e.key === 'ArrowRight') {
         e.preventDefault()
-        setPos((p) => Math.min(p + 1, count - 1))
-        setFlipped(false)
+        goNext()
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        setPos((p) => Math.max(p - 1, 0))
-        setFlipped(false)
+        goPrev()
       } else if (e.key === ' ') {
         e.preventDefault()
         setFlipped((f) => !f)
+      } else if (e.key === 's' || e.key === 'S' || e.key === 'ы') {
+        shuffleNow()
+      } else if (e.key === 'p' || e.key === 'P' || e.key === 'з') {
+        setPlaying((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [count])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count, mode, priority, starredOnly, fullscreen])
 
   // K9: progress overview (X из N per status), mastery bar, reset + report.
   const ProgressOverview = () => {
@@ -1614,8 +1753,10 @@ export default function SetPage() {
     const handleReset = () => {
       if (typeof window !== 'undefined' && !window.confirm('Сбросить весь прогресс по этому набору?')) return
       resetSetProgress(id)
+      setPlaying(false)
+      setFullscreen(false)
       setMode('cards')
-      setOrder(computeOrder(priority))
+      setOrder(buildDisplayOrder(priority, starredOnly))
       setPos(0)
       setFlipped(false)
     }
@@ -1773,6 +1914,13 @@ export default function SetPage() {
         <Write set={set} id={id} />
       ) : cardsDue === 0 ? (
         <NoReviews onRestart={restart} />
+      ) : order.length === 0 ? (
+        <div className="test-placeholder" data-testid="no-starred">
+          <p>Нет помеченных карточек.</p>
+          <button type="button" className="btn btn-primary" onClick={toggleStarredOnly}>
+            Показать все карточки
+          </button>
+        </div>
       ) : (
         <div className="deck">
           <div className="deck-toolbar">
@@ -1784,6 +1932,44 @@ export default function SetPage() {
               />
               <span>Приоритет повторения</span>
             </label>
+            <label className="priority-toggle">
+              <input
+                type="checkbox"
+                checked={starredOnly}
+                onChange={toggleStarredOnly}
+              />
+              <span>Только помеченные</span>
+            </label>
+            <label className="priority-toggle">
+              <input
+                type="checkbox"
+                checked={autospeak}
+                onChange={() => { const v = !autospeak; setAutospeak(v); persistAutospeak(v) }}
+              />
+              <span>Автоозвучка</span>
+            </label>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setPlaying((v) => !v)}
+              data-testid="play-toggle"
+            >
+              {playing ? '⏸ Пауза' : '▶ Play'}
+            </button>
+            <select
+              className="play-interval"
+              value={playInterval}
+              onChange={(e) => { const v = Number(e.target.value); setPlayInterval(v); persistPlayInterval(v) }}
+              title="Интервал автопрокрутки"
+              data-testid="play-interval"
+            >
+              <option value={3}>3 с</option>
+              <option value={5}>5 с</option>
+              <option value={10}>10 с</option>
+            </select>
+            <button type="button" className="btn btn-outline" onClick={shuffleNow} title="Перемешать" data-testid="shuffle-btn">
+              🔀 Перемешать
+            </button>
             <button type="button" className="btn btn-outline" onClick={restart}>
               Заново
             </button>
@@ -1794,6 +1980,35 @@ export default function SetPage() {
             {currentIndex >= 0 && isDueOn(id, currentIndex, todayStr()) && (
               <span className="review-badge">к повторению</span>
             )}
+            <div className="card-actions">
+              <button
+                type="button"
+                className="btn-icon"
+                title="Озвучить"
+                onClick={() => speakEnglish(current.word)}
+                data-testid="speak-btn"
+              >
+                🔊
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
+                onClick={() => toggleStar(currentIndex)}
+                data-testid="star-btn"
+              >
+                {isStarred(currentIndex) ? '★' : '☆'}
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title="Полный экран"
+                onClick={() => setFullscreen(true)}
+                data-testid="fullscreen-btn"
+              >
+                ⛶
+              </button>
+            </div>
             <div
               className="flashcard-scene"
               role="button"
@@ -1801,33 +2016,64 @@ export default function SetPage() {
               onClick={() => setFlipped((f) => !f)}
               onKeyDown={(e) => { if (e.key === 'Enter') setFlipped((f) => !f) }}
             >
-            <div className={'flashcard' + (flipped ? ' flipped' : '')}>
-              <div className="flashcard-face front">
-                <span className="face-label">EN · Слово</span>
-                <h2 className="face-word">{current.word}</h2>
-                <span className="face-hint">Нажмите, чтобы перевернуть</span>
-              </div>
-              <div className="flashcard-face back">
-                <span className="face-label">RU · Перевод</span>
-                <h3 className="back-translation">{current.translation}</h3>
-                {current.examples && current.examples[0] && (
-                  <div className="back-example">
-                    <p className="ex-en">{current.examples[0].en}</p>
-                    <p className="ex-ru">{current.examples[0].ru}</p>
-                  </div>
-                )}
-                {current.family && (
-                  <p className="back-family"><strong>Родственные формы:</strong> {current.family}</p>
-                )}
+              <div className={'flashcard' + (flipped ? ' flipped' : '')}>
+                <CardFront card={current} />
+                <CardBack card={current} />
               </div>
             </div>
-          </div>
           </div>
 
           <div className="deck-controls">
             <button className="btn btn-outline" onClick={goPrev} disabled={pos === 0}>← Назад</button>
-            <span className="deck-progress">Карточка {pos + 1} из {count}</span>
-            <button className="btn btn-outline" onClick={goNext} disabled={pos === count - 1}>Вперёд →</button>
+            <span className="deck-progress">Карточка {pos + 1} из {order.length}</span>
+            <button className="btn btn-outline" onClick={goNext} disabled={pos === order.length - 1}>Вперёд →</button>
+          </div>
+
+          <div className="keys-hints" data-testid="keys-hints">
+            ← →: листать · Пробел: переворот · S: перемешать · P: play/pause
+          </div>
+        </div>
+      )}
+
+      {fullscreen && current && (
+        <div className="fs-overlay" data-testid="fs-overlay">
+          <div className="fs-toolbar">
+            <span className="fs-progress">Карточка {pos + 1} из {order.length}</span>
+            <button
+              type="button"
+              className="btn-icon"
+              title="Озвучить"
+              onClick={() => speakEnglish(current.word)}
+            >
+              🔊
+            </button>
+            <button
+              type="button"
+              className="btn-icon"
+              title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
+              onClick={() => toggleStar(currentIndex)}
+            >
+              {isStarred(currentIndex) ? '★' : '☆'}
+            </button>
+            <button type="button" className="btn btn-outline fs-exit" onClick={() => setFullscreen(false)}>
+              ✕ Выйти
+            </button>
+          </div>
+          <div
+            className="fs-card-scene"
+            role="button"
+            tabIndex={0}
+            onClick={() => setFlipped((f) => !f)}
+            onKeyDown={(e) => { if (e.key === 'Enter') setFlipped((f) => !f) }}
+          >
+            <div className={'flashcard' + (flipped ? ' flipped' : '')}>
+              <CardFront card={current} />
+              <CardBack card={current} />
+            </div>
+          </div>
+          <div className="fs-controls">
+            <button className="btn btn-outline" onClick={goPrev} disabled={pos === 0}>←</button>
+            <button className="btn btn-outline" onClick={goNext} disabled={pos === order.length - 1}>→</button>
           </div>
         </div>
       )}
