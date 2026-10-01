@@ -91,6 +91,38 @@ export function setCardStatus(setId, index, status) {
   }
 }
 
+// Per-set best-time records for the Match mode, stored under "fc_records_<setId>".
+// Value is { ms, date } where ms is the best elapsed time in milliseconds.
+const RECORD_PREFIX = 'fc_records_'
+
+function recordKey(setId) {
+  return RECORD_PREFIX + setId
+}
+
+export function getRecord(setId) {
+  try {
+    const raw = localStorage.getItem(recordKey(setId))
+    return raw ? JSON.parse(raw) : null
+  } catch (e) {
+    console.error('Failed to load record', e)
+    return null
+  }
+}
+
+// Persist `ms` only if it beats the current best. Returns true when a new best
+// was written (false if the existing record is equal or faster).
+export function saveRecord(setId, ms) {
+  const prev = getRecord(setId)
+  if (prev && prev.ms <= ms) return false
+  try {
+    localStorage.setItem(recordKey(setId), JSON.stringify({ ms, date: new Date().toISOString() }))
+  } catch (e) {
+    console.error('Failed to save record', e)
+    return false
+  }
+  return true
+}
+
 // Record that card at `index` was displayed. Doesn't touch ordering.
 export function recordCardView(setId, index) {
   const key = statsKey(setId)

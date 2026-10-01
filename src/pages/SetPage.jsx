@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView } from '../store.js'
+import { getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView, getRecord, saveRecord } from '../store.js'
 
 // ---------- Test mode helpers ----------
 
@@ -1078,6 +1078,334 @@ function Spell({ set, id }) {
   )
 }
 
+// K8 shared status tracker ----------------------------------------------------
+// Tracks a per-card consecutive-correct streak so Match/Blast promote to
+// 'mastered' (2 correct in a row) and demote any error to 'learning', mirroring
+// the K6/K7 useStudySession semantics exactly.
+function useStatusTracker(setId) {
+  const [streaks, setStreaks] = useState({})
+  const applyResult = (cardIndex, correct) => {
+    setStreaks((s) => {
+      const prev = s[String(cardIndex)] || 0
+      const next = correct ? prev + 1 : 0
+      if (correct) setCardStatus(setId, cardIndex, next >= 2 ? 'mastered' : 'learning')
+      else setCardStatus(setId, cardIndex, 'learning')
+      return { ...s, [String(cardIndex)]: next }
+    })
+  }
+  return { applyResult }
+}
+
+// K8 MATCH (timed pairing + best-time records) --------------------------------
+// Shuffles up to 8 (or all) cards into two columns — terms and their translations.
+// The player clicks a term then its translation to pair them; paired cards lock.
+// Completing every pair stops the timer and shows the elapsed time, persisting a
+// best time under "fc_records_<setId>" when it beats the stored record.
+function fmtMs(ms) {
+  const totalSec = ms / 1000
+  if (totalSec < 60) return totalSec.toFixed(1) + ' с'
+  const m = Math.floor(totalSec / 60)
+  const s = (totalSec % 60).toFixed(1)
+  return m + ':' + String(s).padStart(4, '0')
+}
+
+function Match({ set, id }) {
+  const cards = set.cards
+  const n = cards.length
+  const LIMIT = Math.min(8, n)
+
+  const [phase, setPhase] = useState('start') // 'start' | 'playing' | 'done'
+  const [puzzle, setPuzzle] = useState({ terms: [], trans: [] })
+  const [pairs, setPairs] = useState({}) // termIdx -> transIdx
+  const [selected, setSelected] = useState(null)
+  const [elapsed, setElapsed] = useState(0)
+  const [startAt, setStartAt] = useState(0)
+  const [newRecord, setNewRecord] = useState(false)
+  const [best, setBest] = useState(() => getRecord(id))
+
+  const { applyResult } = useStatusTracker(id)
+
+  const start = () => {
+    const chosen = shuffle(cards.map((_, i) => i)).slice(0, LIMIT)
+    setPuzzle({
+      terms: chosen.map((i) => ({ idx: i, label: cards[i].word })),
+      trans: shuffle(chosen.map((i) => ({ idx: i, label: cards[i].translation }))),
+    })
+    setPairs({})
+    setSelected(null)
+    setElapsed(0)
+    setStartAt(Date.now())
+    setNewRecord(false)
+    setPhase('playing')
+  }
+
+  // Timer runs while playing.
+  useEffect(() => {
+    if (phase !== 'playing') return
+    const t = setInterval(() => setElapsed(Date.now() - startAt), 50)
+    return () => clearInterval(t)
+  }, [phase, startAt])
+
+  const pairCount = Object.keys(pairs).length
+  const allPaired = puzzle.terms.length > 0 && pairCount === puzzle.terms.length
+
+  // Finish when the last pair is placed: freeze the time and persist the record.
+  useEffect(() => {
+    if (phase !== 'playing' || !allPaired) return
+    const finalElapsed = Date.now() - startAt
+    setElapsed(finalElapsed)
+    const isNew = saveRecord(id, finalElapsed)
+    setNewRecord(isNew)
+    setBest(getRecord(id))
+    setPhase('done')
+  }, [allPaired, phase, startAt, id])
+
+  const onSelectTerm = (idx) => {
+    if (phase !== 'playing' || pairs[idx] !== undefined) return
+    setSelected(selected === idx ? null : idx)
+  }
+
+  const onSelectTrans = (idx) => {
+    if (phase !== 'playing' || selected === null) return
+    if (pairs[selected] !== undefined || pairs[idx] !== undefined) return
+    if (idx === selected) {
+      // Correct pair: closer to mastered + count the view.
+      recordCardView(id, selected)
+      applyResult(selected, true)
+      setPairs((p) => ({ ...p, [selected]: idx }))
+      setSelected(null)
+    } else {
+      // Wrong pairing attempt for the selected term -> learning.
+      recordCardView(id, selected)
+      applyResult(selected, false)
+      setSelected(null)
+    }
+  }
+
+  if (phase === 'start') {
+    return (
+      <div className="quiz match">
+        <div className="quiz-card match-intro">
+          <span className="face-label">Match · На время</span>
+          <h2 className="quiz-word">Сопоставьте термины и переводы</h2>
+          <p className="match-desc">
+            Нажмите на термин, затем на его перевод, чтобы соединить пару. Цель —
+            {LIMIT} пар за минимальное время.
+          </p>
+        </div>
+        {best && <div className="blast-best">Лучший результат: <strong>{fmtMs(best.ms)}</strong></div>}
+        <button type="button" className="btn btn-primary" onClick={start}>Начать</button>
+      </div>
+    )
+  }
+
+  if (phase === 'done') {
+    return (
+      <div className="quiz quiz-result match-result">
+        <h2>Готово! 🎉</h2>
+        <p className="quiz-result-score">{fmtMs(elapsed)}</p>
+        {newRecord && <p className="match-record-new">🏆 Новый рекорд!</p>}
+        <p className="match-record">Лучший результат: <strong>{best ? fmtMs(best.ms) : '—'}</strong></p>
+        <div className="result-actions">
+          <button type="button" className="btn btn-primary" onClick={start}>Ещё раз</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="quiz match-match">
+      <div className="quiz-meta">
+        <span className="match-timer">⏱ {fmtMs(elapsed)}</span>
+        <span className="match-count">Осталось пар: {puzzle.terms.length - pairCount}</span>
+      </div>
+      <div className="match-grid">
+        <div className="match-col">
+          {puzzle.terms.map((t) => {
+            const isPaired = pairs[t.idx] !== undefined
+            let cls = 'match-card term' + (isPaired ? ' paired' : '') + (selected === t.idx ? ' selected' : '')
+            return (
+              <button key={'t' + t.idx} type="button" className={cls} data-cardidx={t.idx} disabled={isPaired} onClick={() => onSelectTerm(t.idx)}>
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+        <div className="match-col">
+          {puzzle.trans.map((t) => {
+            const usedBy = Object.keys(pairs).find((k) => pairs[k] === t.idx)
+            const cls = 'match-card trans' + (usedBy !== undefined ? ' paired' : '')
+            return (
+              <button key={'r' + t.idx} type="button" className={cls} data-cardidx={t.idx} disabled={usedBy !== undefined} onClick={() => onSelectTrans(t.idx)}>
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// K8 BLAST (arcade block game) ------------------------------------------------
+// A term sits in the center while floating blocks offer translation options.
+// Click the correct one to score; a wrong click costs a heart and a score point.
+// Levels get harder (more blocks, faster float). The run ends when the player
+// clears all levels (win) or runs out of hearts (game over).
+const BLAST_LEVELS = 3
+
+function Blast({ set, id }) {
+  const cards = set.cards
+  const n = cards.length
+
+  const [phase, setPhase] = useState('start') // 'start' | 'playing' | 'done'
+  const [level, setLevel] = useState(1)
+  const [answered, setAnswered] = useState(0) // rounds done in the current level
+  const [score, setScore] = useState(0)
+  const [lives, setLives] = useState(3)
+  const [pool, setPool] = useState([])
+  const [poolPos, setPoolPos] = useState(0)
+  const [qidx, setQidx] = useState(-1)
+  const [blocks, setBlocks] = useState([])
+  const [feedback, setFeedback] = useState(null) // 'correct' | 'wrong' | null
+  const [result, setResult] = useState(null) // 'win' | 'gameover' | null
+
+  const { applyResult } = useStatusTracker(id)
+
+  const roundsPerLevel = (lvl) => Math.min(3 + lvl, n)
+
+  const buildBlocks = (cardIdx, lvl) => {
+    const correctLabel = cards[cardIdx].translation
+    const count = Math.min(3 + lvl, n)
+    const others = shuffle(cards.map((_, i) => i).filter((i) => i !== cardIdx && cards[i].translation !== correctLabel))
+    const dist = others.slice(0, count - 1).map((i) => ({ idx: i, label: cards[i].translation, correct: false }))
+    return shuffle([{ idx: cardIdx, label: correctLabel, correct: true }, ...dist])
+  }
+
+  const launch = (p, pos, lvl) => {
+    const idx = p[pos % p.length]
+    setQidx(idx)
+    setBlocks(buildBlocks(idx, lvl))
+  }
+
+  const start = () => {
+    const p = shuffle(cards.map((_, i) => i))
+    setLevel(1)
+    setAnswered(0)
+    setScore(0)
+    setLives(3)
+    setPool(p)
+    setPoolPos(0)
+    setFeedback(null)
+    setResult(null)
+    setQidx(p[0])
+    setBlocks(buildBlocks(p[0], 1))
+    setPhase('playing')
+  }
+
+  const answer = (block) => {
+    if (phase !== 'playing' || feedback) return
+    recordCardView(id, qidx)
+    const lvl = level
+    const rls = roundsPerLevel(lvl)
+    const nextAnswered = answered + 1
+    const levelDone = nextAnswered >= rls
+    setFeedback(block.correct ? 'correct' : 'wrong')
+    if (block.correct) {
+      applyResult(qidx, true)
+      setScore((s) => s + 1)
+    } else {
+      applyResult(qidx, false)
+      setScore((s) => Math.max(0, s - 1))
+      const nl = lives - 1
+      setLives(nl)
+      if (nl <= 0) { setResult('gameover'); setPhase('done'); return }
+    }
+    if (levelDone) {
+      if (lvl >= BLAST_LEVELS) { setResult('win'); setPhase('done'); return }
+      setLevel(lvl + 1)
+      setAnswered(0)
+    } else {
+      setAnswered(nextAnswered)
+    }
+  }
+
+  const next = () => {
+    const pos = poolPos + 1
+    setPoolPos(pos)
+    setFeedback(null)
+    launch(pool, pos, level)
+  }
+
+  if (phase === 'start') {
+    return (
+      <div className="quiz blast">
+        <div className="quiz-card blast-intro">
+          <span className="face-label">Blast · Аркада</span>
+          <h2 className="quiz-word">Взрывайте правильные переводы</h2>
+          <p className="match-desc">
+            Слово в центре, вокруг — летающие блоки с переводами. Верный ответ —
+            <strong>+1 очко</strong>, ошибка — <strong>−1 очко и −1 жизнь</strong>.
+            Пройдите {BLAST_LEVELS} уровней, пока не кончились сердца.
+          </p>
+        </div>
+        <button type="button" className="btn btn-primary" onClick={start}>Старт</button>
+      </div>
+    )
+  }
+
+  if (phase === 'done') {
+    return (
+      <div className="quiz quiz-result blast-result">
+        <h2>{result === 'win' ? 'Победа! 🏆' : 'Игра окончена'}</h2>
+        <p className="quiz-result-score">Очки: {score}</p>
+        <p className="quiz-result-pct">Уровень {level}</p>
+        <button type="button" className="btn btn-primary" onClick={start}>Играть снова</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="quiz blast">
+      <div className="blast-hud">
+        <span className="blast-score">Очки: <strong>{score}</strong></span>
+        <span className="blast-lives">{'❤️'.repeat(Math.max(0, lives))}</span>
+        <span className="blast-level">Уровень {level}</span>
+      </div>
+      <div className="quiz-card blast-q">
+        <span className="face-label">Blast · Найдите перевод</span>
+        <h2 className="quiz-word">{qidx >= 0 ? cards[qidx].word : ''}</h2>
+      </div>
+      <div className="blast-board">
+        {blocks.map((b, i) => {
+          let cls = 'blast-block' + (feedback && b.correct ? ' correct' : '')
+          return (
+            <button
+              key={i}
+              type="button"
+              className={cls}
+              data-cardidx={b.idx}
+              data-correct={String(b.correct)}
+              style={{ animationDuration: Math.max(2.6 - (level - 1) * 0.4, 1.2) + 's', animationDelay: (i % 5) * 0.2 + 's' }}
+              onClick={() => answer(b)}
+            >
+              {b.label}
+            </button>
+          )
+        })}
+      </div>
+      {feedback && (
+        <div className={'study-feedback ' + feedback}>
+          {feedback === 'correct' ? 'Верно! +1 очко' : 'Мимо! −1 очко, −1 жизнь'}
+        </div>
+      )}
+      {feedback && (
+        <button type="button" className="btn btn-primary quiz-next" onClick={next}>Далее</button>
+      )}
+    </div>
+  )
+}
+
 // K4 priority mode helpers ------------------------------------------------------
 // Persisted mode across sessions: 'on' (sort by view count, default) / 'off'.
 const PRIORITY_KEY = 'fc_priority_mode'
@@ -1279,6 +1607,28 @@ export default function SetPage() {
           Spell
           <span className="mode-k7">K7</span>
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'match'}
+          className={'mode-btn' + (mode === 'match' ? ' active' : '')}
+          title="Сопоставление на время"
+          onClick={() => setMode('match')}
+        >
+          Match
+          <span className="mode-k8">K8</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'blast'}
+          className={'mode-btn' + (mode === 'blast' ? ' active' : '')}
+          title="Аркадная игра"
+          onClick={() => setMode('blast')}
+        >
+          Blast
+          <span className="mode-k8">K8</span>
+        </button>
       </div>
 
       {count === 0 ? (
@@ -1289,6 +1639,10 @@ export default function SetPage() {
         <ExtendedTest set={set} id={id} />
       ) : mode === 'spell' ? (
         <Spell set={set} id={id} />
+      ) : mode === 'match' ? (
+        <Match set={set} id={id} />
+      ) : mode === 'blast' ? (
+        <Blast set={set} id={id} />
       ) : mode === 'learn' ? (
         <Learn set={set} id={id} />
       ) : mode === 'write' ? (
