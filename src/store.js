@@ -34,6 +34,116 @@ export function removeSet(id) {
   saveSets(sets)
 }
 
+// ---------- PRIO: shared server-backed set storage ----------
+// Sets (the cards) are now SHARED on the server. The localStorage functions
+// above remain as a resilient fallback/cache. Every read/write below tries the
+// REST API first and falls back to localStorage when the server is unreachable.
+// Personal study progress (fc_stats_*, fc_status_*, fc_records_*, fc_blast_*,
+// fc_daily_stats, streaks, stars/SRS) stays LOCALSTORAGE ONLY.
+
+const API_BASE = '/api/sets'
+
+async function http(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    ...options,
+  })
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.json()
+}
+
+// List all shared sets from the server.
+export async function apiListSets() {
+  const data = await http(API_BASE)
+  return Array.isArray(data) ? data : []
+}
+
+// Fetch a single set by id from the server.
+export async function apiGetSet(id) {
+  return http(API_BASE + '/' + encodeURIComponent(id))
+}
+
+// Create a set on the server (server assigns the id). Returns { id, ok }.
+export async function apiCreateSet(obj) {
+  return http(API_BASE, { method: 'POST', body: JSON.stringify(obj) })
+}
+
+// Update a set on the server. Returns { id, ok }.
+export async function apiUpdateSet(id, obj) {
+  return http(API_BASE + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(obj) })
+}
+
+// Delete a set on the server. Returns { ok }.
+export async function apiDeleteSet(id) {
+  return http(API_BASE + '/' + encodeURIComponent(id), { method: 'DELETE' })
+}
+
+// Pull the shared set list from the server. On success the server becomes the
+// source of truth: the local cache is replaced with the server's sets and true
+// is returned. On failure (server unreachable) nothing changes locally and
+// false is returned so callers keep using today's localStorage behavior.
+export async function syncSetsFromServer() {
+  try {
+    const serverSets = await apiListSets()
+    saveSets(serverSets)
+    return true
+  } catch (e) {
+    console.warn('Server sets unreachable, using localStorage', e)
+    return false
+  }
+}
+
+// Persist a NEW set: POST to the server; on success also cache it locally (so
+// it shows even before a reload). On server failure fall back to today's
+// localStorage addSet. Returns the saved set (id assigned by the server).
+export async function addSetShared(set) {
+  try {
+    const { id } = await apiCreateSet({
+      topic: set.topic,
+      lesson_meta: set.lesson_meta,
+      cards: set.cards,
+    })
+    const saved = {
+      id: id || set.id,
+      topic: set.topic,
+      lesson_meta: set.lesson_meta,
+      cards: set.cards,
+    }
+    const sets = loadSets().filter((s) => s.id !== saved.id)
+    sets.push(saved)
+    saveSets(sets)
+    return saved
+  } catch (e) {
+    console.warn('Server unreachable, saved set locally', e)
+    return addSet(set)
+  }
+}
+
+// Persist a set UPDATE: PUT to the server; refresh the local cache. On server
+// failure fall back to updating localStorage only.
+export async function updateSetShared(id, obj) {
+  try {
+    await apiUpdateSet(id, { topic: obj.topic, lesson_meta: obj.lesson_meta, cards: obj.cards })
+  } catch (e) {
+    console.warn('Server unreachable, updated set locally only', e)
+  }
+  const updated = { id, topic: obj.topic, lesson_meta: obj.lesson_meta, cards: obj.cards }
+  saveSets(loadSets().map((s) => (s.id === id ? updated : s)))
+  return updated
+}
+
+// Persist a set DELETE: DELETE to the server, then always drop it from the
+// local cache so the UI reflects the removal. Falls back to localStorage-only
+// removal when the server is unreachable.
+export async function deleteSetShared(id) {
+  try {
+    await apiDeleteSet(id)
+  } catch (e) {
+    console.warn('Server unreachable, deleted set locally only', e)
+  }
+  removeSet(id)
+}
+
 // Per-set view counters, stored under "fc_stats_<setId>" keyed by card index.
 const STATS_PREFIX = 'fc_stats_'
 

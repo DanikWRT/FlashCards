@@ -8,9 +8,12 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     host: '0.0.0.0',
-    // K11: forward AI requests from the frontend to the backend proxy.
+    // Dev proxies (same-origin for the frontend, no CORS):
+    //   /api/sets -> python3 sets backend (:5199)
+    //   /api/ai   -> K11 AI proxy (:5198)
     proxy: {
-      '/api': 'http://localhost:5198',
+      '/api/sets': 'http://localhost:5199',
+      '/api/ai': 'http://localhost:5198',
     },
   },
 })

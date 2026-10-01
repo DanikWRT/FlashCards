@@ -1,0 +1,24 @@
+You are working in the FlashCards repo at /home/aifactory/FlashCards (React 18 + react-router 6 + Vite, branch main). Implement node K11 exactly per the acceptance spec below. Study the existing code first (src/store.js, src/pages/MySets.jsx, src/pages/SetPage.jsx, src/pages/ImportPage.jsx, src/App.jsx, src/styles.css, src/components/Layout.jsx) — do NOT break existing modes (Cards/Learn/Write/Test/Match/Blast/Spell, K6 statuses, K4 priority ordering, K9 SRS/progress/streaks, K10 TTS/Play/shuffle/shortcuts/fullscreen/stars/images).
+
+EXISTING DATA MODEL (reuse, don't reinvent):
+- Sets in localStorage 'fc_sets' (loadSets/saveSets/getSet/addSet/removeSet in src/store.js). Each set: { id, topic, cards: [{term, translation, ...}] } — a card MAY optionally have 'image' field.
+- Per-set stats 'fc_stats_<setId>' keyed by card index (K9 SRS, K10 starred). Per-set records 'fc_records_<setId>' (K8 Match best times, Blast scores — inspect SetPage/Game modes to see their exact shape).
+- App routes live in src/App.jsx using react-router 6. MySets is at route '/', ImportPage at '/import' (check actual paths), SetPage at '/set/:id'. Keep the Russian UI language.
+
+--- ACCEPTANCE (fc_k11_body.md) ---
+1. ПАПКИ (folders): group sets into folders stored in localStorage 'fc_folders' as [{id, name, setIds[]}]. UI on MySets to create/edit/delete a folder and assign sets to a folder. Persist via a store helper (loadFolders/saveFolders in src/store.js). Show folders on MySets, filter/group sets by folder.
+2. КЛАССЫ (classes, local): a "Класс" is a group of several sets stored as 'fc_classes' [{id, name, setIds[]}]. Local only, only own visibility, simple list. UI on MySets (add/remove sets to a class, list classes).
+3. ЛИДЕРБОРДЫ (leaderboards): a table of records across ALL sets from their 'fc_records_<id>'. Best Match times and Blast scores, sorted top-5 list, showing which set each record belongs to. Inspect the actual fc_records_ shape (from K8 Match/Blast) and aggregate all sets' records into a combined top-5 leaderboard view.
+4. ШЕРИНГ (share): a "Поделиться" button on a set that copies the link https://<host>/#/set/<id> AND the set's JSON to the clipboard (for passing to another user). QR button optional — skip it.
+5. AI-ГЕНЕРАЦИЯ: on ImportPage add two buttons: "Сгенерировать карточки из заметок" and "Сгенерировать переводы/определения". Implement basic wave (generate cards from a word list). THE FRONTEND MUST CALL THE BACKEND PROXY (see #6) — never put the API key in the frontend. If backend is unreachable, show a stub/message.
+6. BACKEND-PROXY FOR AI: create /home/aifactory/FlashCards/backend — a small server (FastAPI or Node/Express, port 5198) with ONE endpoint POST /api/ai accepting {prompt, max_tokens} that proxies to https://ai.wormsoft.ru/api/gpt/chat/completions with model deepseek-ai/deepseek-v4-flash, using API key from env var WORMSOFT_API_KEY (taken from /home/aifactory/.hermes/.env). Enable CORS. The frontend calls /api/ai (Vite proxy in dev, or same origin in prod). IMPORTANT: do NOT hardcode or leak the key in the client. Read the key from process.env.WORMSOFT_API_KEY at runtime — do not print/expose it.
+   - For the backend: Node/Express is simplest here (no build step). Add it under backend/ with its own package.json, express via `npm install express` (or use FastAPI if you prefer, but show it runs). Wire the Vite dev proxy so `/api/ai` in the frontend forwards to http://localhost:5198.
+   - Make sure the backend allocates port 5198 and CORS allows the dev origin http://127.0.0.1:5174.
+
+Also write a verify script k11_verify.cjs following the Playwright-vs-dev-server pattern already used (k10_verify.cjs is the reference; dev server is already running at http://127.0.0.1:5174, and playwright is available under /tmp/pwtest/node_modules — you may need NODE_PATH=/tmp/pwtest/node_modules). Run it to PASS acceptance (test folders, classes, leaderboard aggregation, share-clipboard where feasible, and that the AI backend endpoint responds and the frontend calls it — for the AI call you may mock/fetch the backend but try a real request to confirm the proxy works; if the wormsoft endpoint is unreachable, verify the frontend shows the stub). Verify `npm run build` exits 0. Take screenshots of the new UI (fc_k11_folders.png, fc_k11_ai.png as required by the body).
+
+Start the backend on port 5198 in the background and confirm POST /api/ai returns a response before claiming success.
+
+COMMIT to main when done. Then report: changed files, commit hash, build result, backend endpoint verification result, verify checks count + pass/fail, screenshot paths.
+
+Constraints: keep existing UI language Russian. Do not rename/break existing exports used elsewhere. Do not leak the API key anywhere (no hardcoded secrets in src/ or backend/ — backend reads process.env only). Keep changes focused on K11.

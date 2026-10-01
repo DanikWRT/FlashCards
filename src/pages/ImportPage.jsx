@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { addSet } from '../store.js'
+import { addSetShared } from '../store.js'
 
 function parseAndValidate(text) {
   let data
@@ -93,7 +93,7 @@ export default function ImportPage() {
     e.target.value = ''
   }
 
-  const handleImport = () => {
+  const handleImport = async () => {
     setError('')
     setSuccess('')
     if (!text.trim()) {
@@ -109,7 +109,8 @@ export default function ImportPage() {
         cards: parsed.cards,
         createdAt: new Date().toISOString(),
       }
-      addSet(set)
+      // PRIO: persist on the shared server (with localStorage fallback).
+      await addSetShared(set)
       setSuccess(`Набор «${set.topic}» импортирован (${set.cards.length} карточек).`)
       setText('')
       navigate('/', { replace: true })
@@ -120,7 +121,7 @@ export default function ImportPage() {
 
   // Build a cards set from a successful AI reply and either navigate to it
   // (generate-cards) or drop the JSON into the textarea for review (translate).
-  const finishAiCards = (content, topicFallback, mode) => {
+  const finishAiCards = async (content, topicFallback, mode) => {
     const data = extractJson(content)
     const cards = Array.isArray(data.cards) ? data.cards : []
     if (!cards.length) throw new Error('Модель не вернула карточек.')
@@ -136,7 +137,8 @@ export default function ImportPage() {
         cards: parsed.cards,
         createdAt: new Date().toISOString(),
       }
-      addSet(set)
+      // PRIO: persist on the shared server (with localStorage fallback).
+      await addSetShared(set)
       setAiMsg(`Сгенерировано карточек: ${set.cards.length}. Набор «${set.topic}» создан.`)
       navigate('/', { replace: true })
     } else {
@@ -158,7 +160,7 @@ export default function ImportPage() {
     setAiMsg('Запрос к AI-бэкенду…')
     try {
       const content = await callAI(buildPrompt(text))
-      finishAiCards(content, topicFallback, mode)
+      await finishAiCards(content, topicFallback, mode)
     } catch (err) {
       // Backend unreachable / parse failure -> show a stub message.
       setAiMsg('⚠ Бэкенд AI недоступен или вернул ошибку. Показываю заглушку: вставьте заметки вручную.')

@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   loadSets, removeSet, getDayStreak, getStatuses, downloadProgressReport,
   loadFolders, saveFolders, addFolder, removeFolder, renameFolder,
   folderAssignSet, folderUnassignSet,
   loadClasses, saveClasses, addClass, removeClass, renameClass,
   classSetMember, classSetUnmember, buildLeaderboard,
+  syncSetsFromServer, deleteSetShared,
 } from '../store.js'
 
 // Share of a set's cards currently mastered, as a percentage (rounded).
@@ -51,6 +52,18 @@ export default function MySets() {
   const [editingClass, setEditingClass] = useState(null)
   const [classRename, setClassRename] = useState('')
 
+  // PRIO: on load, pull the shared set list from the server. On success the
+  // server becomes the source of truth and the local cache/UI is replaced with
+  // the server's sets; on failure (server unreachable) the existing localStorage
+  // sets are used unchanged.
+  useEffect(() => {
+    let cancelled = false
+    syncSetsFromServer().then(() => {
+      if (!cancelled) refresh()
+    })
+    return () => { cancelled = true }
+  }, [])
+
   const refresh = () => {
     setSets(loadSets())
     setFolders(loadFolders())
@@ -59,8 +72,9 @@ export default function MySets() {
   }
 
   const handleDelete = (id) => {
-    removeSet(id)
-    refresh()
+    // PRIO: delete on the server (shared), falling back to localStorage-only
+    // removal when the server is unreachable.
+    deleteSetShared(id).then(refresh)
   }
 
   const handleCreateFolder = () => {

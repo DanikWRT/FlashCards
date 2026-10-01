@@ -1,0 +1,28 @@
+You are implementing K8 for the FlashCards app at /home/aifactory/FlashCards (React 18 + react-router 6 + Vite 5, JSX, plain CSS in src/styles.css, all data in localStorage). Work in this repo, edit src/, and commit to the current branch (main). Do NOT use any llm/pipeline tools — just do the implementation directly and verify in a real browser with Playwright.
+
+## Existing code map (read these first)
+- src/store.js: localStorage store. "fc_sets" array store (cards are {id, word, translation, examples?, family?}). Per-set view counters in key "fc_stats_<setId>" as a FLAT dict keyed by card index (getStats(setId) -> dict, recordCardView(setId, index) increments). Card statuses in "fc_status_<setId>" as FLAT dict index -> "not_studied"/"learning"/"mastered" with helpers getStatuses/getStatus/setCardStatus(setId, index, status). K6 semantics: correct answers advance toward mastered (2 correct in a row -> mastered), any error -> learning.
+- src/pages/SetPage.jsx: the /set/:id page. There is a common mode-switcher (role=tablist) with FIVE modes right now (mode state: 'cards','learn','write','test','spell'): Карточки, Learn (K6 tag), Write (K6 tag), Тест (K3 tag via ExtendedTest), Spell (K7 tag). The switcher buttons render ~lines 1228-1282; the mode body renders ~lines 1288-1296 (ternary: test->ExtendedTest, spell->Spell, learn->Learn, write->Write, else cards deck). Cards are passed to modes as `set` (the set object) and `id` (set id). Existing mode components (ExtendedTest, Spell, Learn, Write) live in the same SetPage.jsx file and take (set, id) props; they call setCardStatus(id, cardIndex, ...) and getStatus(id, index) / getStats(id)[idx]. Follow this exact style.
+- src/styles.css: all styling; follow existing classes (mode-switcher, mode-btn with mode-k3/mode-k6/mode-k7 tag spans, btn, btn-primary, btn-outline, quiz-*, flashcard-*, deck-*, learn-*, write-*, spell-*, study-status, test-* etc.). Add new classes for match-* and blast-* consistent with the existing style.
+- src/components/Layout.jsx: nav shell. Build: `npm run build`. Dev server: `node_modules/.bin/vite` on 127.0.0.1:5174. Playwright 1.63.0 installed in node_modules (chromium cached).
+
+## Acceptance (K8) — implement ALL on /set/:id
+1. MATCH (time race): a new mode "Match". Show N (e.g. up to 8, using all cards if < 8) terms and their N translations shuffled on the board as cards. The user clicks to pair a term with its translation (click one then the other to connect/match them; matched pairs lock/clear). Goal: match all pairs in minimum time. A timer is shown on screen. When all pairs are matched, show a result screen with the elapsed time.
+2. RECORDS: save the best time per set in localStorage under key "fc_records_<setId>" (store the best elapsed ms/s or formatted time, plus maybe the date). Show "лучший результат" (best result) on the Match start/result screen and update it if a new run beats it.
+3. BLAST / BLOCKS (arcade): a new mode "Blast". Blocks with translation options "fly/hang" on screen; the question (a term) is shown in the center. The user clicks the correct translation block to score points. On a wrong click apply a penalty. Levels get harder (more blocks / faster). End screen with the score counter.
+4. PROGRESS: correct answers in Match and Blast must update card statuses (fc_status_<setId>) using setCardStatus consistently with K6/K7 semantics (correct -> closer to mastered, e.g. 2 in a row -> mastered; error -> learning) and the view counter fc_stats_ via recordCardView. Keep existing fc_stats_ semantics for the plain cards mode untouched.
+5. Add BOTH modes to the switcher on /set/:id so it reads: Карточки / Learn / Write / Тест / Match / Blast (Mat ch and Blast get a "K8" tag span, e.g. <span className="mode-k8">K8</span>).
+
+Backward-compat: do NOT change how cards mode reads getStats(id)["<idx>"] as a bare count. Keep all data in localStorage. Handle empty-set gracefully (existing "В этом наборе нет карточек." placeholder). Keep code clean, consistent with existing style, build passing.
+
+## Verification (MANDATORY, in a real browser with Playwright)
+Write a Node .cjs script (like prior k7_verify.cjs / k6_verify.cjs) using playwright from node_modules. It must:
+1. Seed localStorage with a small set (e.g. 6 cards with word/translation) via page.addInitScript so it persists on the origin.
+2. Open http://127.0.0.1:5174/ and navigate into the set.
+3. Match mode: confirm the switcher shows all six modes; enter Match; confirm N term and N translation cards render, the timer runs, clicking term+translation pairs them, completing all pairs shows the result screen with elapsed time; confirm a best record is persisted under fc_records_<setId> and "лучший результат" shows; confirm a slower re-run does not overwrite the record but a faster one does. Confirm correct matches update statuses/recordCardView.
+4. Blast mode: enter Blast; confirm blocks with translations render and the center shows a term; click the correct block -> score increases; click a wrong block -> penalty; finishing (completing a level or running out) shows an end screen with the score counter. Confirm correct answers update statuses.
+5. Take screenshots fc_k8_match.png and fc_k8_blast.png in /home/aifactory/FlashCards/ and save them.
+Run `npm run build` and confirm it passes (exit 0) BEFORE committing.
+
+## Commit
+When done, build passes, and screenshots exist, `git add` and `git commit` on the current branch (main) with a clear message like "K8: match (timed pairing + records) and blast (arcade) game modes". Do NOT push. Report the commit hash, the changed files, the screenshots' absolute paths, and what you verified.
