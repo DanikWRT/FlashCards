@@ -51,6 +51,46 @@ export function getStats(setId) {
   }
 }
 
+// Per-set card study statuses, stored under "fc_status_<setId>" keyed by card
+// index (flat dict, e.g. {"0":"learning","1":"mastered"}). Kept in the same
+// local-storage family as the view counters (fc_stats_*) so counters and study
+// status stay together conceptually without changing counter semantics.
+const STATUS_PREFIX = 'fc_status_'
+
+function statusKey(setId) {
+  return STATUS_PREFIX + setId
+}
+
+export function getStatuses(setId) {
+  try {
+    const raw = localStorage.getItem(statusKey(setId))
+    return raw ? JSON.parse(raw) : {}
+  } catch (e) {
+    console.error('Failed to load statuses', e)
+    return {}
+  }
+}
+
+export function getStatus(setId, index) {
+  return getStatuses(setId)[String(index)] || 'not_studied'
+}
+
+export function setCardStatus(setId, index, status) {
+  const key = statusKey(setId)
+  let statuses = {}
+  try {
+    statuses = JSON.parse(localStorage.getItem(key) || '{}')
+  } catch (e) {
+    statuses = {}
+  }
+  statuses[String(index)] = status
+  try {
+    localStorage.setItem(key, JSON.stringify(statuses))
+  } catch (e) {
+    console.error('Failed to save statuses', e)
+  }
+}
+
 // Record that card at `index` was displayed. Doesn't touch ordering.
 export function recordCardView(setId, index) {
   const key = statsKey(setId)

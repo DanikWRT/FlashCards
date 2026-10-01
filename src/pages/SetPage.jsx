@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { getSet, getStats, recordCardView } from '../store.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView } from '../store.js'
 
 // ---------- Test mode helpers ----------
 
@@ -184,6 +184,317 @@ function Quiz({ set, id }) {
   )
 }
 
+// K6 study (Learn/Write) shared helpers ------------------------------------------
+
+// Adaptive work order for a set: not-yet-mastered cards first, then mastered;
+// among non-mastered, learning-status cards (had an error) ahead of not_studied,
+// then fewest view-count first; stable tiebreak by card index.
+const STATUS_RANK = { learning: 0, not_studied: 1, mastered: 2 }
+
+function adaptiveOrder(id, cards) {
+  const stats = getStats(id)
+  const statuses = getStatuses(id)
+  const idxs = cards.map((_, i) => i)
+  return [...idxs].sort((a, b) => {
+    const ra = STATUS_RANK[statuses[String(a)] || 'not_studied']
+    const rb = STATUS_RANK[statuses[String(b)] || 'not_studied']
+    if (ra !== rb) return ra - rb
+    const va = stats[String(a)] || 0
+    const vb = stats[String(b)] || 0
+    if (va !== vb) return va - vb
+    return a - b
+  })
+}
+
+// Initial work queue excludes cards already mastered in a previous session.
+function initialQueue(id, cards) {
+  return adaptiveOrder(id, cards).filter((i) => getStatus(id, i) !== 'mastered')
+}
+
+function countMastered(id, cards) {
+  return cards.reduce((acc, _, i) => acc + (getStatus(id, i) === 'mastered' ? 1 : 0), 0)
+}
+
+// Shared state machine for Learn (multiple choice) and Write (typed input).
+// Tracks a per-session consecutive-correct streak per card: 2 in a row -> mastered,
+// any error -> learning. Queue is advanced on `advance()`; mastered cards leave the
+// queue, un-mastered ones go back to the end so difficult cards get repeated.
+function useStudySession(set, id) {
+  const cards = set.cards
+  const n = cards.length
+  const [direction, setDirection] = useState('en-ru')
+  const [queue, setQueue] = useState(() => initialQueue(id, cards))
+  const [streaks, setStreaks] = useState({})
+  const [masteredCount, setMasteredCount] = useState(() => countMastered(id, cards))
+  const [running, setRunning] = useState(queue.length > 0)
+
+  const idx = running && queue.length ? queue[0] : -1
+  const card = idx >= 0 ? cards[idx] : null
+
+  // Apply a correct/wrong result to the current card's status + streak. Returns true if mastered.
+  const applyResult = (correct) => {
+    const i = queue[0]
+    const s = { ...streaks }
+    if (correct) {
+      const ns = (s[i] || 0) + 1
+      s[i] = ns
+      if (ns >= 2) {
+        setCardStatus(id, i, 'mastered')
+        setMasteredCount((c) => c + 1)
+      } else {
+        setCardStatus(id, i, 'learning')
+      }
+    } else {
+      s[i] = 0
+      setCardStatus(id, i, 'learning')
+    }
+    setStreaks(s)
+  }
+
+  // Advance to the next card; mastered ones leave the queue, others cycle to the end.
+  const advance = () => {
+    const i = queue[0]
+    const cleaned = queue.filter((x) => x !== i)
+    const mastered = (streaks[i] || 0) >= 2
+    const nextQueue = mastered ? cleaned : [...cleaned, i]
+    if (nextQueue.length === 0) {
+      setQueue([])
+      setRunning(false)
+    } else {
+      setQueue(nextQueue)
+    }
+  }
+
+  const restart = () => {
+    setStreaks({})
+    setQueue(initialQueue(id, cards))
+    setRunning(initialQueue(id, cards).length > 0)
+    setMasteredCount(countMastered(id, cards))
+  }
+
+  return {
+    direction, setDirection, idx, card, masteredCount, n, running, applyResult, advance, restart,
+  }
+}
+
+// Shared direction switcher used by Learn and Write (like Quiz's).
+function StudyDirection({ direction, setDirection }) {
+  return (
+    <div className="quiz-direction" role="tablist" aria-label="Направление">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={direction === 'en-ru'}
+        className={'quiz-dir-btn' + (direction === 'en-ru' ? ' active' : '')}
+        onClick={() => setDirection('en-ru')}
+      >
+        en-ru
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={direction === 'ru-en'}
+        className={'quiz-dir-btn' + (direction === 'ru-en' ? ' active' : '')}
+        onClick={() => setDirection('ru-en')}
+      >
+        ru-en
+      </button>
+    </div>
+  )
+}
+
+// Progress bar + mastered counter, shared by Learn/Write.
+function StudyProgress({ mastered, total }) {
+  const pct = total ? Math.round((mastered / total) * 100) : 0
+  return (
+    <div className="study-progress">
+      <div className="quiz-progress" style={{ width: '100%' }}>
+        <div className="quiz-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="study-progress-label">Освоено {mastered} из {total}</span>
+    </div>
+  )
+}
+
+// Shared "session finished" result block.
+function StudyDone({ label, onRestart }) {
+  return (
+    <div className="quiz quiz-result">
+      <h2>{label}</h2>
+      <p className="quiz-result-pct">Все карточки освоены 🎉</p>
+      <button type="button" className="btn btn-primary" onClick={onRestart}>
+        Начать заново
+      </button>
+    </div>
+  )
+}
+
+// K6 LEARN (adaptive multiple choice) -------------------------------------------
+function Learn({ set, id }) {
+  const s = useStudySession(set, id)
+  const { direction, setDirection, card, masteredCount, n, running } = s
+  const [phase, setPhase] = useState('question')
+  const [picked, setPicked] = useState(null)
+  const [result, setResult] = useState(null) // 'correct' | 'wrong'
+
+  const choices = useMemo(
+    () => (card ? makeChoices(set.cards, s.idx, direction) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [card, direction, s.idx]
+  )
+
+  const correct = card ? answerOf(card, direction) : ''
+  const prompt = card ? (direction === 'en-ru' ? card.word : card.translation) : ''
+
+  const choose = (val) => {
+    if (phase !== 'question') return
+    setPicked(val)
+    const isCorrect = val === correct
+    setResult(isCorrect ? 'correct' : 'wrong')
+    s.applyResult(isCorrect)
+    setPhase('feedback')
+  }
+
+  const next = () => {
+    s.advance()
+    setPhase('question')
+    setPicked(null)
+    setResult(null)
+  }
+
+  if (!running) {
+    return <StudyDone label="Обучение завершено" onRestart={s.restart} />
+  }
+
+  return (
+    <div className="quiz study">
+      <StudyDirection direction={direction} setDirection={setDirection} />
+      <StudyProgress mastered={masteredCount} total={n} />
+
+      <div className="quiz-card">
+        <span className="face-label">{direction === 'en-ru' ? 'EN · Слово' : 'RU · Перевод'}</span>
+        <h2 className="quiz-word study-prompt">{prompt}</h2>
+        <span className="study-status">{getStatus(id, s.idx)}</span>
+      </div>
+
+      <div className="quiz-choices">
+        {choices.map((val, i) => {
+          let cls = 'quiz-choice'
+          if (phase === 'feedback' && val === correct) cls += ' correct'
+          if (phase === 'feedback' && val === picked && val !== correct) cls += ' wrong'
+          return (
+            <button key={i} type="button" className={cls} disabled={phase === 'feedback'} onClick={() => choose(val)}>
+              {val}
+            </button>
+          )
+        })}
+      </div>
+
+      {phase === 'feedback' && (
+        <>
+          <div className={'study-feedback ' + result}>
+            {result === 'correct' ? 'Верно!' : <>Неверно. Правильный ответ: <strong>{correct}</strong></>}
+          </div>
+          <button type="button" className="btn btn-primary quiz-next" onClick={next}>
+            Далее
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// K6 WRITE (typed active recall) --------------------------------------------------
+function Write({ set, id }) {
+  const s = useStudySession(set, id)
+  const { direction, setDirection, card, masteredCount, n, running } = s
+  const [input, setInput] = useState('')
+  const [phase, setPhase] = useState('question')
+  const [result, setResult] = useState(null)
+
+  const prompt = card ? (direction === 'en-ru' ? card.word : card.translation) : ''
+  const correct = card ? (direction === 'en-ru' ? card.translation : card.word) : ''
+
+  const submit = (given) => {
+    if (phase !== 'question') return
+    const answer = (given === undefined ? input : given).trim().toLowerCase()
+    const isCorrect = answer === correct.trim().toLowerCase()
+    setResult(isCorrect ? 'correct' : 'wrong')
+    s.applyResult(isCorrect)
+    setPhase('feedback')
+  }
+
+  const next = () => {
+    s.advance()
+    setPhase('question')
+    setInput('')
+    setResult(null)
+  }
+
+  const onKey = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (phase === 'question') submit()
+      else next()
+    }
+  }
+
+  if (!running) {
+    return <StudyDone label="Написание завершено" onRestart={s.restart} />
+  }
+
+  return (
+    <div className="quiz study">
+      <StudyDirection direction={direction} setDirection={setDirection} />
+      <StudyProgress mastered={masteredCount} total={n} />
+
+      <div className="quiz-card">
+        <span className="face-label">{direction === 'en-ru' ? 'EN · Слово' : 'RU · Перевод'}</span>
+        <h2 className="quiz-word study-prompt">{prompt}</h2>
+      </div>
+
+      <form className="write-form" onSubmit={(e) => { e.preventDefault(); submit() }}>
+        <input
+          className="write-input"
+          type="text"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          placeholder="Введите ответ…"
+          value={input}
+          disabled={phase === 'feedback'}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKey}
+          autoFocus
+        />
+        {phase === 'question' && (
+          <div className="write-actions">
+            <button type="button" className="btn btn-primary" onClick={() => submit()}>
+              Проверить
+            </button>
+            <button type="button" className="btn btn-outline" onClick={() => submit('')}>
+              Не помню
+            </button>
+          </div>
+        )}
+      </form>
+
+      {phase === 'feedback' && (
+        <>
+          <div className={'study-feedback ' + result}>
+            {result === 'correct'
+              ? `Верно! ${correct}`
+              : <>Неверно. Правильный ответ: <strong>{correct}</strong></>}
+          </div>
+          <button type="button" className="btn btn-primary quiz-next" onClick={next}>
+            Далее
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // K4 priority mode helpers ------------------------------------------------------
 // Persisted mode across sessions: 'on' (sort by view count, default) / 'off'.
 const PRIORITY_KEY = 'fc_priority_mode'
@@ -344,6 +655,28 @@ export default function SetPage() {
         <button
           type="button"
           role="tab"
+          aria-selected={mode === 'learn'}
+          className={'mode-btn' + (mode === 'learn' ? ' active' : '')}
+          title="Адаптивное обучение"
+          onClick={() => setMode('learn')}
+        >
+          Learn
+          <span className="mode-k6">K6</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'write'}
+          className={'mode-btn' + (mode === 'write' ? ' active' : '')}
+          title="Активное припоминание"
+          onClick={() => setMode('write')}
+        >
+          Write
+          <span className="mode-k6">K6</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={mode === 'test'}
           className={'mode-btn' + (mode === 'test' ? ' active' : '')}
           title="Режим теста"
@@ -354,18 +687,16 @@ export default function SetPage() {
         </button>
       </div>
 
-      {mode === 'test' ? (
-        count === 0 ? (
-          <div className="test-placeholder">
-            <p>В этом наборе нет карточек.</p>
-          </div>
-        ) : (
-          <Quiz set={set} id={id} />
-        )
-      ) : count === 0 ? (
+      {count === 0 ? (
         <div className="test-placeholder">
           <p>В этом наборе нет карточек.</p>
         </div>
+      ) : mode === 'test' ? (
+        <Quiz set={set} id={id} />
+      ) : mode === 'learn' ? (
+        <Learn set={set} id={id} />
+      ) : mode === 'write' ? (
+        <Write set={set} id={id} />
       ) : (
         <div className="deck">
           <div className="deck-toolbar">
