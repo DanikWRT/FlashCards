@@ -11,6 +11,16 @@ import {
 } from '../store.js'
 import { matchAnswer } from '../normalize.js'
 
+// K23: shared registries so the single top-level keydown handler can reach into
+// the currently-active study mode. Only one mode is ever mounted at a time, so
+// a module-level registry is safe: each answer-bearing component overwrites the
+// option handlers it currently renders, and clears them on unmount/transition.
+//   answerRegistry.handlers : array of () => void, one per visible answer button
+//                             (index n <-> digit key n+1).
+//   matchRegistry           : Match mode's live handler for digit+letter pairing.
+const answerRegistry = { handlers: [] }
+const matchRegistry = { active: false, handle: null }
+
 // ---------- K10 flashcard helpers ----------
 
 // Optional card image (K7 acceptance: a card MAY have an 'image' URL field).
@@ -521,6 +531,12 @@ function ChoiceQuestion({ q, feedback, onAnswer }) {
     const correct = val === q.correct
     onAnswer(q.cardIndex, correct, { cardIndex: q.cardIndex, type: q.type, prompt: q.prompt, correct: q.correct })
   }
+  // K23 (2): register the on-screen choice buttons as digit hotkeys (1..N in
+  // DOM order) so pressing the digit triggers the exact same action as a click.
+  useEffect(() => {
+    answerRegistry.handlers = q.choices.map((val) => () => answer(val))
+    return () => { answerRegistry.handlers = [] }
+  }, [q, feedback])
   return (
     <>
       <div className="quiz-card">
@@ -534,6 +550,7 @@ function ChoiceQuestion({ q, feedback, onAnswer }) {
           if (feedback && val === picked && val !== q.correct) cls += ' wrong'
           return (
             <button key={i} type="button" className={cls} disabled={feedback} onClick={() => answer(val)}>
+              {i < 4 && <span className="choice-digit">{i + 1}</span>}
               {val}
             </button>
           )
@@ -939,6 +956,13 @@ function Learn({ set, id }) {
     setResult(null)
   }
 
+  // K23 (2): digits 1..N click the visible Learn choices (DOM order).
+  useEffect(() => {
+    if (phase !== 'question') { answerRegistry.handlers = []; return }
+    answerRegistry.handlers = choices.map((val) => () => choose(val))
+    return () => { answerRegistry.handlers = [] }
+  }, [choices, phase])
+
   if (masteredCount >= n) {
     return <StudyDone label="Обучение завершено" onRestart={s.restart} />
   }
@@ -973,6 +997,7 @@ function Learn({ set, id }) {
           if (phase === 'feedback' && val === picked && val !== correct) cls += ' wrong'
           return (
             <button key={i} type="button" className={cls} disabled={phase === 'feedback'} onClick={() => choose(val)}>
+              {i < 4 && <span className="choice-digit">{i + 1}</span>}
               {val}
             </button>
           )
@@ -1335,6 +1360,56 @@ function Match({ set, id }) {
     }
   }
 
+  // K23 (4): register Match's keyboard pairing while playing. A digit selects a
+  // row in the LEFT (term) column; a letter a.. selects a row in the RIGHT
+  // (trans) column. Order and swapping are both supported ("2a" == "a2"). When a
+  // digit AND a letter are present the pair is placed exactly like clicking the
+  // term card then its translation. Re-registered whenever the puzzle or
+  // placed pairs change so the handler always sees fresh state.
+  useEffect(() => {
+    if (phase !== 'playing') {
+      matchRegistry.active = false
+      matchRegistry.handle = null
+      return
+    }
+    matchRegistry.active = true
+    let buf = {}
+    matchRegistry.handle = (k) => {
+      let consumed = false
+      if (/^[1-9]$/.test(k)) {
+        const row = Number(k) - 1
+        if (row < puzzle.terms.length) { buf.digit = row; consumed = true }
+      } else if (/^[a-z]$/.test(k)) {
+        const col = k.charCodeAt(0) - 97
+        if (col < puzzle.trans.length) { buf.letter = col; consumed = true }
+      }
+      if (buf.digit !== undefined && buf.letter !== undefined) {
+        const d = buf.digit, l = buf.letter
+        buf = {}
+        const term = puzzle.terms[d]
+        const trans = puzzle.trans[l]
+        if (term && trans) {
+          const termIdx = term.idx
+          const transIdx = trans.idx
+          if (pairs[termIdx] === undefined && pairs[transIdx] === undefined) {
+            recordCardView(id, termIdx)
+            if (transIdx === termIdx) {
+              // Correct pair.
+              applyResult(termIdx, true)
+              setPairs((p) => ({ ...p, [termIdx]: transIdx }))
+            } else {
+              // Wrong pairing attempt for the selected term -> learning.
+              applyResult(termIdx, false)
+            }
+            setSelected(null)
+          }
+        }
+      }
+      return consumed
+    }
+    return () => { matchRegistry.active = false; matchRegistry.handle = null }
+  }, [phase, puzzle, pairs])
+
   if (phase === 'start') {
     return (
       <div className="quiz match">
@@ -1374,22 +1449,24 @@ function Match({ set, id }) {
       </div>
       <div className="match-grid">
         <div className="match-col">
-          {puzzle.terms.map((t) => {
+          {puzzle.terms.map((t, r) => {
             const isPaired = pairs[t.idx] !== undefined
             let cls = 'match-card term' + (isPaired ? ' paired' : '') + (selected === t.idx ? ' selected' : '')
             return (
               <button key={'t' + t.idx} type="button" className={cls} data-cardidx={t.idx} disabled={isPaired} onClick={() => onSelectTerm(t.idx)}>
+                {r < 9 && <span className="choice-digit match-digit">{r + 1}</span>}
                 {t.label}
               </button>
             )
           })}
         </div>
         <div className="match-col">
-          {puzzle.trans.map((t) => {
+          {puzzle.trans.map((t, r) => {
             const usedBy = Object.keys(pairs).find((k) => pairs[k] === t.idx)
             const cls = 'match-card trans' + (usedBy !== undefined ? ' paired' : '')
             return (
               <button key={'r' + t.idx} type="button" className={cls} data-cardidx={t.idx} disabled={usedBy !== undefined} onClick={() => onSelectTrans(t.idx)}>
+                {r < 26 && <span className="choice-digit match-letter">{String.fromCharCode(97 + r)}</span>}
                 {t.label}
               </button>
             )
@@ -1497,6 +1574,13 @@ function Blast({ set, id }) {
     launch(pool, pos, level)
   }
 
+  // K23 (2): digits 1..N click the visible Blast blocks (DOM order).
+  useEffect(() => {
+    if (phase !== 'playing') { answerRegistry.handlers = []; return }
+    answerRegistry.handlers = blocks.map((b) => () => answer(b))
+    return () => { answerRegistry.handlers = [] }
+  }, [phase, blocks])
+
   if (phase === 'start') {
     return (
       <div className="quiz blast">
@@ -1549,6 +1633,7 @@ function Blast({ set, id }) {
               style={{ animationDuration: Math.max(2.6 - (level - 1) * 0.4, 1.2) + 's', animationDelay: (i % 5) * 0.2 + 's' }}
               onClick={() => answer(b)}
             >
+              {i < 4 && <span className="choice-digit blast-digit">{i + 1}</span>}
               {b.label}
             </button>
           )
@@ -1683,6 +1768,24 @@ export default function SetPage() {
   const [starredOnly, setStarredOnly] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [starVer, setStarVer] = useState(0)
+  // K23 (5): collapsible top-right settings menu (non-vertical shift of game area).
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // K23 (1): when entering fullscreen in ANY mode we drive the presentation with
+  // CSS classes on `document.body` + the page root (see styles.css .fs-active),
+  // which hides the global app header too, so the game area truly fills the
+  // viewport. This is a body-level side effect of the same `fullscreen` state.
+  useEffect(() => {
+    const b = document.body
+    if (fullscreen) b.classList.add('fs-body')
+    else b.classList.remove('fs-body')
+    return () => b.classList.remove('fs-body')
+  }, [fullscreen])
+  // K23 (6): entering fullscreen on mobile collapses the settings menu so only
+  // the game remains (the sidebar/chrome are hidden by CSS anyway).
+  useEffect(() => {
+    if (fullscreen) setSettingsOpen(false)
+  }, [fullscreen])
 
   // Display order of card indices for the current pass of cards mode.
   // Computed once on entry / restart, then fixed for the whole pass.
@@ -1934,6 +2037,34 @@ export default function SetPage() {
         return
       }
 
+      // K23 (4): Match mode keyboard pairing. A digit selects a left (term)
+      // row, a letter a.. selects a right (trans) row; when a digit AND a letter
+      // have both been entered (in either order) the pair is placed — exactly
+      // as if the term then the translation were clicked. Delegated to the live
+      // Match registry; returns true when it consumed the key.
+      if (h.mode === 'match' && matchRegistry.active && matchRegistry.handle) {
+        if (matchRegistry.handle(k)) {
+          e.preventDefault()
+          return
+        }
+      }
+
+      // K23 (2): digit answer-option hotkeys (1..4) in EVERY mode. The active
+      // mode registers its currently visible answer handlers (array order == DOM
+      // order), so pressing digit N triggers the exact same action as clicking
+      // that answer button. This runs after the in-field guard above, so digits
+      // never fire while the user is typing in a text input.
+      if (/^[1-4]$/.test(k)) {
+        const opts = answerRegistry.handlers
+        const idx = Number(k) - 1
+        if (opts && idx < opts.length && opts[idx]) {
+          e.preventDefault()
+          opts[idx]()
+          answerRegistry.handlers = []
+        }
+        return
+      }
+
       // Cards-mode actions: prev/next, flip, shuffle, play/pause.
       if (h.mode === 'cards') {
         if (k === 'ArrowRight') {
@@ -2032,7 +2163,13 @@ export default function SetPage() {
   }
 
   return (
-    <div className="page set-layout set-page">
+    <div
+      className={
+        'page set-layout set-page' +
+        (fullscreen ? ' fs-active' : '') +
+        (settingsOpen ? ' settings-open' : '')
+      }
+    >
       <aside className="set-sidebar">
       <div className="set-head">
         <Link to="/" className="back-link">← Мои наборы</Link>
@@ -2095,6 +2232,7 @@ export default function SetPage() {
       </aside>
 
       <div className="set-main">
+      <div className="set-main-head">
       <div className="mode-switcher" role="tablist" aria-label="Режим просмотра">
         <button
           type="button"
@@ -2173,7 +2311,75 @@ export default function SetPage() {
         </button>
       </div>
 
-      <div className="mode-stage">
+      {/* K23 (5): top-right collapsible settings menu (visible in every mode). */}
+        <button
+          type="button"
+          className="settings-toggle"
+          onClick={() => setSettingsOpen((o) => !o)}
+          aria-expanded={settingsOpen}
+          data-testid="settings-toggle"
+          title="Настройки"
+        >
+          <span aria-hidden="true">⚙</span>
+          <span className="settings-toggle-label">Настройки</span>
+          <span className="settings-chevron">{settingsOpen ? '▴' : '▾'}</span>
+        </button>
+      </div>
+
+      {settingsOpen && (
+        <div className="settings-panel" data-testid="settings-panel">
+          <div className="settings-panel-title">Настройки</div>
+          <button
+            type="button"
+            className="btn btn-outline settings-fs-btn"
+            onClick={() => setFullscreen((v) => !v)}
+            data-testid="settings-fullscreen"
+          >
+            ⛶ Полный экран
+          </button>
+          <div className="settings-panel-group" data-testid="settings-cards-controls">
+            <label className="settings-panel-row">
+              <input type="checkbox" checked={priority} onChange={togglePriority} data-testid="settings-priority" />
+              <span>Приоритет повторения</span>
+            </label>
+            <label className="settings-panel-row">
+              <input type="checkbox" checked={starredOnly} onChange={toggleStarredOnly} data-testid="settings-starred" />
+              <span>Только помеченные</span>
+            </label>
+            <label className="settings-panel-row">
+              <input type="checkbox" checked={autospeak} onChange={() => { const v = !autospeak; setAutospeak(v); persistAutospeak(v) }} />
+              <span>Автоозвучка</span>
+            </label>
+            <div className="settings-panel-row btns">
+              <button type="button" className="btn btn-outline" onClick={() => setPlaying((v) => !v)} data-testid="settings-play">
+                {playing ? '⏸ Пауза' : '▶ Play'}
+              </button>
+              <select
+                className="play-interval"
+                value={playInterval}
+                onChange={(e) => { const v = Number(e.target.value); setPlayInterval(v); persistPlayInterval(v) }}
+                data-testid="settings-interval"
+              >
+                <option value={3}>3 с</option>
+                <option value={5}>5 с</option>
+                <option value={10}>10 с</option>
+              </select>
+            </div>
+            <div className="settings-panel-row btns">
+              <button type="button" className="btn btn-outline" onClick={shuffleNow} data-testid="settings-shuffle">🔀 Перемешать</button>
+              <button type="button" className="btn btn-outline" onClick={restart}>Заново</button>
+            </div>
+          </div>
+          {mode !== 'cards' && (
+            <p className="settings-panel-note">
+              Настройки этого режима расположены внутри самого режима. Здесь доступны общие
+              элементы: полный экран, перемешать и порядок карточек.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="mode-stage" data-testid={fullscreen ? 'fs-overlay' : undefined}>
       {count === 0 ? (
         <div className="test-placeholder">
           <p>В этом наборе нет карточек.</p>
@@ -2334,7 +2540,23 @@ export default function SetPage() {
       <KeyboardLegend />
 
       </div>{/* /set-main */}
-      {fullscreen && current && (
+
+      {/* K23 (1): floating fullscreen exit button for the CSS-driven fullscreen
+          (every mode EXCEPT cards, which keeps its own dedicated fs-overlay). */}
+      {fullscreen && mode !== 'cards' && (
+        <button
+          type="button"
+          className="fs-exit-btn"
+          onClick={() => setFullscreen(false)}
+          data-testid="fs-exit"
+          title="Выйти из полного экрана (Esc)"
+        >
+          ✕ Выйти
+        </button>
+      )}
+
+      {/* Cards mode keeps its dedicated dark fullscreen presentation overlay. */}
+      {fullscreen && mode === 'cards' && current && (
         <div className="fs-overlay" data-testid="fs-overlay">
           <div className="fs-toolbar">
             <span className="fs-progress">Карточка {pos + 1} из {order.length}</span>

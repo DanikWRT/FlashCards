@@ -2201,6 +2201,7 @@ h1 {
     width: 100%;
     flex: none;
     gap: 10px;
+    order: 1;
   }
   .set-sidebar .k9-progress-stats {
     flex-direction: row;
@@ -2208,9 +2209,230 @@ h1 {
   }
   .set-main {
     width: 100%;
+    order: 0; /* K23 (6): game area first on mobile */
   }
   .mode-stage {
     min-height: 420px;
+  }
+}
+
+/* ---------- K23 (1) fullscreen across EVERY mode (CSS-driven) ---------- */
+/* body-level lock + hide the global app header when any mode is fullscreen. */
+body.fs-body {
+  overflow: hidden;
+}
+body.fs-body .header {
+  display: none;
+}
+
+/* The page root gains .fs-active: everything except the active game area is
+   hidden and the stage fills the viewport. The mode component stays mounted
+   (it holds its own state) — we only visually strip the chrome. */
+.page.fs-active {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: auto;
+  background: var(--bg);
+}
+.page.fs-active .set-sidebar,
+.page.fs-active .mode-switcher,
+.page.fs-active .set-main-head,
+.page.fs-active .deck-toolbar,
+.page.fs-active .deck-controls,
+.page.fs-active .keys-hints,
+.page.fs-active .kb-legend,
+.page.fs-active .lesson-meta,
+.page.fs-active .k9-progress {
+  display: none !important;
+}
+.page.fs-active .set-main {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.page.fs-active .mode-stage {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  padding: 20px;
+  min-height: 100vh;
+  justify-content: center;
+}
+.page.fs-active .mode-stage > .deck,
+.page.fs-active .mode-stage > .quiz,
+.page.fs-active .mode-stage > .test-placeholder {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+/* Floating exit button for non-cards fullscreen. */
+.fs-exit-btn {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 120;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+}
+.fs-exit-btn:hover {
+  border-color: var(--primary);
+}
+
+/* ---------- K23 (5) top-right collapsible settings menu ---------- */
+.set-main {
+  position: relative;
+}
+.set-main-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.settings-toggle:hover {
+  border-color: var(--primary);
+}
+.settings-chevron {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.settings-panel {
+  position: absolute;
+  top: 54px;
+  right: 0;
+  width: 330px;
+  max-width: calc(100vw - 24px);
+  z-index: 70;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-panel-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.settings-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-panel-row.btns {
+  flex-wrap: wrap;
+}
+.settings-panel-row.btns .btn {
+  flex: 1;
+  min-width: 120px;
+}
+.settings-panel-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.settings-fs-btn {
+  width: 100%;
+}
+
+/* When the panel is open the game/study widget compresses and shifts LEFT,
+   freeing the right-hand space the panel occupies; closing restores width. */
+.settings-open .mode-stage > .deck,
+.settings-open .mode-stage > .quiz,
+.settings-open .mode-stage > .test-placeholder {
+  margin-right: 350px;
+}
+
+/* ---------- K23 (2) digit answer hotkeys: numeric badges ---------- */
+.choice-digit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin-right: 7px;
+  border-radius: 5px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.blast-digit {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+.match-digit,
+.match-letter {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary);
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+}
+
+/* Settings menu collapses in fullscreen (the game area occupies everything).
+   The floating .fs-exit-btn stays visible for non-cards fullscreen. */
+.page.fs-active .settings-panel,
+.page.fs-active .settings-toggle {
+  display: none !important;
+}
+/* In cards fullscreen the dedicated .fs-overlay provides its own exit; hide the
+   shared floating button so there aren't two. */
+.page.fs-active:has(> .fs-overlay) .fs-exit-btn {
+  display: none !important;
+}
+@media (max-width: 900px) {
+  .settings-panel {
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    box-shadow: none;
+    border: 1px solid var(--border);
+  }
+  .settings-open .mode-stage > .deck,
+  .settings-open .mode-stage > .quiz,
+  .settings-open .mode-stage > .test-placeholder {
+    margin-right: 0;
   }
 }
 
