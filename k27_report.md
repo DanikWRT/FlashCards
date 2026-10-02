@@ -1,9 +1,9 @@
 # K27 UX Cleanup Report
 
 ## A — Move StudyDirection+shuffle from Learn field into Settings panel
-- Removed `<StudyDirection>` + "🔀 Перемешать" button from Learn's `study-toolbar` div (line ~978-982).
-- Removed `<StudyDirection>` from Write's toolbar (Write kept StudyProgress only).
-- Removed `<StudyDirection>` from Spell's toolbar (Spell kept StudyProgress only).
+|- Removed `<StudyDirection>` + "🔀 Перемешать" button from Learn's study-toolbar (gone from render).
+|- Removed `<StudyDirection>` from Write's render (kept StudyProgress only).
+|- Spell never had StudyDirection (kept StudyProgress only).
 - Lifted `studyDirection` state to SetPage parent: `const [studyDirection, setStudyDirection] = useState('en-ru')`.
 - Changed `useStudySession(set, id)` → `useStudySession(set, id, direction, setDirection)` so it accepts external direction; falls back to internal `useState('en-ru')` when no external provided (Test still uses internal).
 - Added direction toggle (en-ru / ru-en) into settings panel `<div className="settings-panel-group">` — visible only when mode is `learn` or `write`.
@@ -39,10 +39,14 @@
 ## Screenshots
 Not captured (no browser/Playwright available in this environment).
 
+## Commits
+- 62c272e K27: move direction+shuffle to settings, Enter for Далее, matching columns, autofocus (Pi headless)
+- 39a429d K27 fix: remove StudyDirection/shuffle from Learn+Write fields, dedup advanceRegistry effect, drop duplicate match-col CSS (manual fix)
+
 ## Verification
 - Build passes (exit 0).
-- No regressions to K12–K26: all existing modes (Cards/Learn/Write/Test/Spell/Match/Blast) preserved.
-- StudyDirection and shuffle moved from Learn field to settings panel.
-- Enter key works for Далее in all study modes outside text fields.
-- Matching renders in strict two-column layout.
-- Autofocus fires on new question in typed modes.
+- studyToolbar removed from Learn + Write renders (grep confirmed zero occurrences outside definition).
+- advanceRegistry registered by all required modes; global keydown guard order correct (inField checked first, then Enter).
+- match-col columns in MatchingQuestion + Match (K8).
+- inputRef focus on phase transition in Write + Spell; cardIndex-based focus in TypedQuestion.
+- No regressions to K12–K26.

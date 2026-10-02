@@ -333,12 +333,6 @@ function ExtendedTest({ set, id }) {
     return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
   }, [feedback, next])
 
-  // K27: register advance handler for Enter key in feedback phase.
-  useEffect(() => {
-    advanceRegistry.handler = feedback ? next : null
-    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
-  }, [feedback, next])
-
   if (!started) {
     const toggleType = (tid) =>
       setCfg((c) => ({
@@ -1015,12 +1009,6 @@ function Learn({ set, id }) {
 
   return (
     <div className="quiz study">
-      <div className="study-toolbar">
-        <StudyDirection direction={direction} setDirection={setDirection} />
-        <button type="button" className="btn btn-outline" onClick={s.shuffleNow} title="Перемешать порядок">
-          🔀 Перемешать
-        </button>
-      </div>
       <StudyProgress mastered={masteredCount} total={n} />
 
       <div className="quiz-card">
@@ -1116,7 +1104,6 @@ function Write({ set, id, studyDirection, setStudyDirection }) {
 
   return (
     <div className="quiz study">
-      <StudyDirection direction={direction} setDirection={setDirection} />
       <StudyProgress mastered={masteredCount} total={n} />
 
       <div className="quiz-card">
@@ -2510,7 +2497,7 @@ export default function SetPage() {
               </select>
             </div>
             <div className="settings-panel-row btns">
-              <button type="button" className="btn btn-outline" onClick={shuffleNow} data-testid="settings-shuffle">🔀 Перемешать</button>
+              <button type="button" className="btn btn-outline" onClick={() => { if (studyRegistry.shuffleNow) studyRegistry.shuffleNow(); else shuffleNow() }} data-testid="settings-shuffle">🔀 Перемешать</button>
               <button type="button" className="btn btn-outline" onClick={restart}>Заново</button>
             </div>
           </div>
