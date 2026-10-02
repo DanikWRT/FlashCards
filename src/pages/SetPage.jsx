@@ -1499,8 +1499,26 @@ function Blast({ set, id }) {
   const [blocks, setBlocks] = useState([])
   const [feedback, setFeedback] = useState(null) // 'correct' | 'wrong' | null
   const [result, setResult] = useState(null) // 'win' | 'gameover' | null
+  // K26: full-screen green flash shown while a correct answer auto-advances.
+  const [flash, setFlash] = useState(false)
+  const flashTimerRef = useRef(null)
 
   const { applyResult } = useStatusTracker(id)
+
+  // K26: latest live game state for the delayed auto-advance timer, so the
+  // timeout callback never operates on a stale level/pool/poolPos closure.
+  const blastState = useRef({ phase, level, pool, poolPos })
+  blastState.current = { phase, level, pool, poolPos }
+
+  // K26: single shared timer for the correct-answer auto-advance.
+  const clearBlastFlash = () => {
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = null
+    }
+  }
+  // Make sure a pending flash timer never fires after the component unmounts.
+  useEffect(() => () => clearBlastFlash(), [])
 
   // K11: persist the best Blast score so it can appear on the leaderboard.
   useEffect(() => {
@@ -1526,6 +1544,8 @@ function Blast({ set, id }) {
   }
 
   const start = () => {
+    clearBlastFlash()
+    setFlash(false)
     const p = shuffle(cards.map((_, i) => i))
     setLevel(1)
     setAnswered(0)
@@ -1547,10 +1567,19 @@ function Blast({ set, id }) {
     const rls = roundsPerLevel(lvl)
     const nextAnswered = answered + 1
     const levelDone = nextAnswered >= rls
-    setFeedback(block.correct ? 'correct' : 'wrong')
-    if (block.correct) {
+    const isCorrect = block.correct
+    setFeedback(isCorrect ? 'correct' : 'wrong')
+    if (isCorrect) {
       applyResult(qidx, true)
       setScore((s) => s + 1)
+      // K26: correct -> green flash + auto-advance 600ms later (NO manual click).
+      setFlash(true)
+      clearBlastFlash()
+      flashTimerRef.current = setTimeout(() => {
+        flashTimerRef.current = null
+        setFlash(false)
+        advance()
+      }, 600)
     } else {
       applyResult(qidx, false)
       setScore((s) => Math.max(0, s - 1))
@@ -1558,6 +1587,7 @@ function Blast({ set, id }) {
       setLives(nl)
       if (nl <= 0) { setResult('gameover'); setPhase('done'); return }
     }
+    // Scoring / lives / level / win / gameover always fire exactly ONCE here.
     if (levelDone) {
       if (lvl >= BLAST_LEVELS) { setResult('win'); setPhase('done'); return }
       setLevel(lvl + 1)
@@ -1567,7 +1597,13 @@ function Blast({ set, id }) {
     }
   }
 
-  const next = () => {
+  // K26: the single progression step (replaces next()). Reads live state from
+  // the blastState ref so the delayed correct-answer timer always advances with
+  // the freshest level/pool/poolPos, and never double-advances out of 'playing'.
+  const advance = () => {
+    clearBlastFlash()
+    const { pool, poolPos, level, phase } = blastState.current
+    if (phase !== 'playing') return
     const pos = poolPos + 1
     setPoolPos(pos)
     setFeedback(null)
@@ -1611,6 +1647,7 @@ function Blast({ set, id }) {
 
   return (
     <div className="quiz blast">
+      {flash && <div className="blast-flash-green" aria-hidden="true" />}
       <div className="blast-hud">
         <span className="blast-score">Очки: <strong>{score}</strong></span>
         <span className="blast-lives">{'❤️'.repeat(Math.max(0, lives))}</span>
@@ -1633,7 +1670,7 @@ function Blast({ set, id }) {
               style={{ animationDuration: Math.max(2.6 - (level - 1) * 0.4, 1.2) + 's', animationDelay: (i % 5) * 0.2 + 's' }}
               onClick={() => answer(b)}
             >
-              {i < 4 && <span className="choice-digit blast-digit">{i + 1}</span>}
+              <span className="choice-digit blast-digit">{i + 1}</span>
               {b.label}
             </button>
           )
@@ -1644,8 +1681,9 @@ function Blast({ set, id }) {
           {feedback === 'correct' ? 'Верно! +1 очко' : 'Мимо! −1 очко, −1 жизнь'}
         </div>
       )}
-      {feedback && (
-        <button type="button" className="btn btn-primary quiz-next" onClick={next}>Далее</button>
+      {/* K26: wrong answers need a manual Далее; correct answers auto-advance. */}
+      {feedback === 'wrong' && (
+        <button type="button" className="btn btn-primary quiz-next" onClick={advance}>Далее</button>
       )}
     </div>
   )
@@ -1789,10 +1827,6 @@ export default function SetPage() {
 
   // Display order of card indices for the current pass of cards mode.
   // Computed once on entry / restart, then fixed for the whole pass.
-  // K17: the cards-mode control panel (deck-toolbar) is a compact collapsible
-  // row; default to shown so the card is unobstructed but the panel can be
-  // tucked away when the user wants maximum card space.
-  const [toolbarOpen, setToolbarOpen] = useState(true)
 
   const [order, setOrder] = useState(() => {
     if (!set) return []
@@ -2049,12 +2083,13 @@ export default function SetPage() {
         }
       }
 
-      // K23 (2): digit answer-option hotkeys (1..4) in EVERY mode. The active
+      // K23 (2): digit answer-option hotkeys (1..N) in EVERY mode. The active
       // mode registers its currently visible answer handlers (array order == DOM
       // order), so pressing digit N triggers the exact same action as clicking
-      // that answer button. This runs after the in-field guard above, so digits
-      // never fire while the user is typing in a text input.
-      if (/^[1-4]$/.test(k)) {
+      // that answer button. N is unbounded but each key is a single digit (1..9),
+      // so Blast blocks beyond the 4th remain reachable by keyboard too. This runs
+      // after the in-field guard above, so digits never fire while typing.
+      if (/^[1-9]$/.test(k)) {
         const opts = answerRegistry.handlers
         const idx = Number(k) - 1
         if (opts && idx < opts.length && opts[idx]) {
@@ -2407,71 +2442,6 @@ export default function SetPage() {
         </div>
       ) : (
         <div className="deck">
-          <div className="deck-toolbar">
-            <button
-              type="button"
-              className="deck-toolbar-toggle"
-              onClick={() => setToolbarOpen((o) => !o)}
-              title={toolbarOpen ? 'Свернуть панель управления' : 'Показать панель управления'}
-              aria-expanded={toolbarOpen}
-              data-testid="toolbar-toggle"
-            >
-              <span aria-hidden="true">⚙</span>
-              <span className="toolbar-chevron">{toolbarOpen ? '▾' : '▸'}</span>
-            </button>
-            {toolbarOpen && (<>
-            <label className="priority-toggle">
-              <input
-                type="checkbox"
-                checked={priority}
-                onChange={togglePriority}
-              />
-              <span>Приоритет повторения</span>
-            </label>
-            <label className="priority-toggle">
-              <input
-                type="checkbox"
-                checked={starredOnly}
-                onChange={toggleStarredOnly}
-              />
-              <span>Только помеченные</span>
-            </label>
-            <label className="priority-toggle">
-              <input
-                type="checkbox"
-                checked={autospeak}
-                onChange={() => { const v = !autospeak; setAutospeak(v); persistAutospeak(v) }}
-              />
-              <span>Автоозвучка</span>
-            </label>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setPlaying((v) => !v)}
-              data-testid="play-toggle"
-            >
-              {playing ? '⏸ Пауза' : '▶ Play'}
-            </button>
-            <select
-              className="play-interval"
-              value={playInterval}
-              onChange={(e) => { const v = Number(e.target.value); setPlayInterval(v); persistPlayInterval(v) }}
-              title="Интервал автопрокрутки"
-              data-testid="play-interval"
-            >
-              <option value={3}>3 с</option>
-              <option value={5}>5 с</option>
-              <option value={10}>10 с</option>
-            </select>
-            <button type="button" className="btn btn-outline" onClick={shuffleNow} title="Перемешать" data-testid="shuffle-btn">
-              🔀 Перемешать
-            </button>
-            <button type="button" className="btn btn-outline" onClick={restart}>
-              Заново
-            </button>
-            </>)}
-          </div>
-
           <div className="flashcard-wrap">
             {currentIndex >= 0 && isDueOn(id, currentIndex, todayStr()) && (
               <span className="review-badge">к повторению</span>
@@ -2541,9 +2511,9 @@ export default function SetPage() {
 
       </div>{/* /set-main */}
 
-      {/* K23 (1): floating fullscreen exit button for the CSS-driven fullscreen
-          (every mode EXCEPT cards, which keeps its own dedicated fs-overlay). */}
-      {fullscreen && mode !== 'cards' && (
+      {/* K23/K26: ONE unified floating fullscreen exit button, shown in EVERY
+          mode when fullscreen is active (Cards included). */}
+      {fullscreen && (
         <button
           type="button"
           className="fs-exit-btn"
@@ -2553,50 +2523,6 @@ export default function SetPage() {
         >
           ✕ Выйти
         </button>
-      )}
-
-      {/* Cards mode keeps its dedicated dark fullscreen presentation overlay. */}
-      {fullscreen && mode === 'cards' && current && (
-        <div className="fs-overlay" data-testid="fs-overlay">
-          <div className="fs-toolbar">
-            <span className="fs-progress">Карточка {pos + 1} из {order.length}</span>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Озвучить"
-              onClick={() => speakEnglish(current.word)}
-            >
-              🔊
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title={isStarred(currentIndex) ? 'Убрать метку' : 'Пометить важным'}
-              onClick={() => toggleStar(currentIndex)}
-            >
-              {isStarred(currentIndex) ? '★' : '☆'}
-            </button>
-            <button type="button" className="btn btn-outline fs-exit" onClick={() => setFullscreen(false)}>
-              ✕ Выйти
-            </button>
-          </div>
-          <div
-            className="fs-card-scene"
-            role="button"
-            tabIndex={0}
-            onClick={() => setFlipped((f) => !f)}
-            onKeyDown={(e) => { if (e.key === 'Enter') setFlipped((f) => !f) }}
-          >
-            <div className={'flashcard' + (flipped ? ' flipped' : '')}>
-              <CardFront card={current} />
-              <CardBack card={current} />
-            </div>
-          </div>
-          <div className="fs-controls">
-            <button className="btn btn-outline" onClick={goPrev} disabled={pos === 0}>←</button>
-            <button className="btn btn-outline" onClick={goNext} disabled={pos === order.length - 1}>→</button>
-          </div>
-        </div>
       )}
 
       {/* K19: login gate for guests trying to start a training mode.

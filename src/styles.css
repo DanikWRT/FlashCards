@@ -2227,13 +2227,22 @@ body.fs-body .header {
 
 /* The page root gains .fs-active: everything except the active game area is
    hidden and the stage fills the viewport. The mode component stays mounted
-   (it holds its own state) — we only visually strip the chrome. */
+   (it holds its own state) — we only visually strip the chrome. K26 unifies
+   the fullscreen presentation for EVERY mode to the Cards-style dark overlay:
+   the CSS variable palette is swapped to dark slate so all game surfaces and
+   text re-colour automatically, matching the old #0f172a cards overlay. */
 .page.fs-active {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
   position: fixed;
   inset: 0;
   z-index: 90;
   overflow: auto;
-  background: var(--bg);
+  background: #0f172a;
+  color: #e2e8f0;
 }
 .page.fs-active .set-sidebar,
 .page.fs-active .mode-switcher,
@@ -2260,6 +2269,31 @@ body.fs-body .header {
   padding: 20px;
   min-height: 100vh;
   justify-content: center;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+/* Make the active game area read well on the dark fullscreen stage in every
+   mode (white headings/words, muted labels, slate card surfaces). */
+.page.fs-active .mode-stage .flashcard,
+.page.fs-active .mode-stage .quiz-card,
+.page.fs-active .mode-stage .test-placeholder {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+.page.fs-active .mode-stage .quiz-word,
+.page.fs-active .mode-stage .quiz-result h2,
+.page.fs-active .mode-stage .face-word,
+.page.fs-active .mode-stage .back-translation,
+.page.fs-active .mode-stage .deck-progress {
+  color: #fff;
+}
+.page.fs-active .mode-stage .face-label,
+.page.fs-active .mode-stage .match-desc,
+.page.fs-active .mode-stage .quiz-result-pct,
+.page.fs-active .mode-stage .blast-level,
+.page.fs-active .mode-stage .blast-score {
+  color: #94a3b8;
 }
 .page.fs-active .mode-stage > .deck,
 .page.fs-active .mode-stage > .quiz,
@@ -2411,14 +2445,9 @@ body.fs-body .header {
 }
 
 /* Settings menu collapses in fullscreen (the game area occupies everything).
-   The floating .fs-exit-btn stays visible for non-cards fullscreen. */
+   The single unified floating .fs-exit-btn stays visible in every mode. */
 .page.fs-active .settings-panel,
 .page.fs-active .settings-toggle {
-  display: none !important;
-}
-/* In cards fullscreen the dedicated .fs-overlay provides its own exit; hide the
-   shared floating button so there aren't two. */
-.page.fs-active:has(> .fs-overlay) .fs-exit-btn {
   display: none !important;
 }
 @media (max-width: 900px) {
@@ -2436,61 +2465,19 @@ body.fs-body .header {
   }
 }
 
-/* Fullscreen presentation overlay (in-app, robust). */
-.fs-overlay {
+/* ---------- K26 Blast full-screen green flash on a correct answer ---------- */
+.blast-flash-green {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  background: #0f172a;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  padding: 24px;
+  z-index: 95;
+  background: rgba(34, 197, 94, 0.35);
+  pointer-events: none;
+  animation: blastFlashFade 0.6s ease-out forwards;
 }
-.fs-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  justify-content: center;
+@keyframes blastFlashFade {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
-.fs-toolbar .btn-icon {
-  background: #1e293b;
-  border-color: #334155;
-  color: #fff;
-}
-.fs-toolbar .btn-icon:hover { background: #334155; }
-.fs-progress {
-  color: #94a3b8;
-  font-weight: 600;
-  font-size: 15px;
-  min-width: 140px;
-  text-align: center;
-}
-.fs-exit { border-color: #334155; color: #e2e8f0; }
-.fs-card-scene {
-  width: min(680px, 100%);
-  height: 430px;
-  perspective: 1400px;
-  cursor: pointer;
-}
-.fs-card-scene .flashcard {
-  width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.6s ease;
-}
-.fs-card-scene .flashcard.flipped { transform: rotateY(180deg); }
-.fs-card-scene .flashcard-face {
-  background: #1e293b;
-  border-color: #334155;
-}
-.fs-card-scene .flashcard-face .face-label { color: #94a3b8; }
-.fs-card-scene .flashcard-face .face-word { color: #fff; font-size: 54px; }
-.fs-card-scene .flashcard-face .back-translation { color: #7dd3fc; font-size: 32px; }
-.fs-card-scene .flashcard-face .face-hint { color: #64748b; }
-.fs-card-scene .card-image { border-color: #334155; }
 /* ---------- K15 keyboard legend ---------- */
 .kb-legend {
   align-self: flex-start;
