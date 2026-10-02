@@ -14,6 +14,16 @@ function userPrefix() {
   return progressUser ? progressUser + '_' : ''
 }
 
+// K19: progress writes are strictly per-user. When nobody is logged in
+// (progressUser === null) a guest may only VIEW cards — they must never
+// accumulate any counters/statuses/records/streaks, because those would
+// belong to no one. All progress reads return neutral and all writes are
+// no-ops while logged out. Once a user logs in (setProgressUser(username))
+// their prefixed keys start accumulating and persist across logout/login.
+function progressEnabled() {
+  return !!progressUser
+}
+
 // Local storage store for FC sets (key: "fc_sets")
 
 const STORAGE_KEY = 'fc_sets'
@@ -215,6 +225,7 @@ function statsKey(setId) {
 }
 
 export function getStats(setId) {
+  if (!progressEnabled()) return {}
   try {
     const raw = localStorage.getItem(statsKey(setId))
     return raw ? JSON.parse(raw) : {}
@@ -233,6 +244,7 @@ function statusKey(setId) {
 }
 
 export function getStatuses(setId) {
+  if (!progressEnabled()) return {}
   try {
     const raw = localStorage.getItem(statusKey(setId))
     return raw ? JSON.parse(raw) : {}
@@ -247,6 +259,7 @@ export function getStatus(setId, index) {
 }
 
 export function setCardStatus(setId, index, status) {
+  if (!progressEnabled()) return
   const key = statusKey(setId)
   let statuses = {}
   try {
@@ -269,6 +282,7 @@ function recordKey(setId) {
 }
 
 export function getRecord(setId) {
+  if (!progressEnabled()) return null
   try {
     const raw = localStorage.getItem(recordKey(setId))
     return raw ? JSON.parse(raw) : null
@@ -281,6 +295,7 @@ export function getRecord(setId) {
 // Persist `ms` only if it beats the current best. Returns true when a new best
 // was written (false if the existing record is equal or faster).
 export function saveRecord(setId, ms) {
+  if (!progressEnabled()) return false
   const prev = getRecord(setId)
   if (prev && prev.ms <= ms) return false
   try {
@@ -315,6 +330,7 @@ export function getViews(setId, index) {
 // stored value stays a plain number so existing readers/tests keep working;
 // K9 review-schedule data lives in the sibling "_srs" sub-map (see below).
 export function recordCardView(setId, index) {
+  if (!progressEnabled()) return
   const key = statsKey(setId)
   let stats = {}
   try {
@@ -361,6 +377,7 @@ export function isDueOn(setId, index, dateStr) {
 // review is pushed out; on an error the interval resets so the card is reviewed
 // again today. Keeps the existing view count untouched.
 export function applySrsAnswer(setId, index, correct) {
+  if (!progressEnabled()) return
   const key = statsKey(setId)
   let stats = {}
   try {
@@ -399,6 +416,7 @@ export function getCardStarred(setId, index) {
 
 // Set/unset the important flag for the card at `index`, persisted in fc_stats_.
 export function setCardStarred(setId, index, starred) {
+  if (!progressEnabled()) return
   const key = statsKey(setId)
   let stats = {}
   try {
@@ -455,6 +473,7 @@ function nextInterval(interval) {
 
 // Clear all per-set progress (statuses, stats incl. reviews, best records).
 export function resetSetProgress(setId) {
+  if (!progressEnabled()) return
   try { localStorage.removeItem(statusKey(setId)) } catch (e) { /* ignore */ }
   try { localStorage.removeItem(statsKey(setId)) } catch (e) { /* ignore */ }
   try { localStorage.removeItem(recordKey(setId)) } catch (e) { /* ignore */ }
@@ -464,6 +483,7 @@ export function resetSetProgress(setId) {
 
 // Record that studying happened on the current local date (idempotent).
 export function recordStudyDay() {
+  if (!progressEnabled()) return
   const today = todayStr()
   try {
     const map = JSON.parse(localStorage.getItem(dailylKey()) || '{}')
@@ -476,6 +496,7 @@ export function recordStudyDay() {
 
 // Number of consecutive days (ending today) present in the daily-study map.
 export function getDayStreak() {
+  if (!progressEnabled()) return 0
   let map = {}
   try {
     map = JSON.parse(localStorage.getItem(dailylKey()) || '{}')
@@ -661,6 +682,7 @@ function blastKey(setId) {
 }
 
 export function getBlastScore(setId) {
+  if (!progressEnabled()) return null
   try {
     const raw = localStorage.getItem(blastKey(setId))
     return raw ? JSON.parse(raw) : null
@@ -672,6 +694,7 @@ export function getBlastScore(setId) {
 
 // Persist `score` only if it beats the current best. Returns true on new best.
 export function saveBlastScore(setId, score) {
+  if (!progressEnabled()) return false
   const prev = getBlastScore(setId)
   if (prev && prev.score >= score) return false
   try {

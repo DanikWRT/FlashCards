@@ -1,5 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '../auth.jsx'
+import LoginModal from '../components/LoginModal.jsx'
 import {
   getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
@@ -1586,8 +1588,32 @@ function KeyboardLegend() {
 
 export default function SetPage() {
   const { id } = useParams()
+  const { isLoggedIn } = useAuth()
   const [set] = useState(() => getSet(id))
   const [mode, setMode] = useState('cards')
+  // K19: guests may only VIEW cards. The other study modes (Learn, Write,
+  // Тест, Spell, Match, Blast) plus all progress are login-gated.
+  const LOGIN_MODES = ['learn', 'write', 'test', 'spell', 'match', 'blast']
+  const [gateOpen, setGateOpen] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [pendingMode, setPendingMode] = useState(null)
+  const selectMode = (m) => {
+    if (m !== 'cards' && !isLoggedIn) {
+      // Remember the mode the guest wanted, so a successful login from the
+      // gate resumes straight into it.
+      setPendingMode(m)
+      setGateOpen(true)
+    } else {
+      setMode(m)
+    }
+  }
+  // When a guest logs in via the gate, jump into the mode they were after.
+  useEffect(() => {
+    if (isLoggedIn && pendingMode) {
+      setMode(pendingMode)
+      setPendingMode(null)
+    }
+  }, [isLoggedIn])
   const [flipped, setFlipped] = useState(false)
   const [priority, setPriorityMode] = useState(readPriority)
   // K11: "Поделиться" message (link + JSON copied to clipboard).
@@ -1952,7 +1978,7 @@ export default function SetPage() {
           aria-selected={mode === 'learn'}
           className={'mode-btn' + (mode === 'learn' ? ' active' : '')}
           title="Адаптивное обучение"
-          onClick={() => setMode('learn')}
+          onClick={() => selectMode('learn')}
         >
           Learn
           <span className="mode-k6">K6</span>
@@ -1963,7 +1989,7 @@ export default function SetPage() {
           aria-selected={mode === 'write'}
           className={'mode-btn' + (mode === 'write' ? ' active' : '')}
           title="Активное припоминание"
-          onClick={() => setMode('write')}
+          onClick={() => selectMode('write')}
         >
           Write
           <span className="mode-k6">K6</span>
@@ -1974,7 +2000,7 @@ export default function SetPage() {
           aria-selected={mode === 'test'}
           className={'mode-btn' + (mode === 'test' ? ' active' : '')}
           title="Режим теста"
-          onClick={() => setMode('test')}
+          onClick={() => selectMode('test')}
         >
           Тест
           <span className="mode-k3">K3</span>
@@ -1985,7 +2011,7 @@ export default function SetPage() {
           aria-selected={mode === 'spell'}
           className={'mode-btn' + (mode === 'spell' ? ' active' : '')}
           title="Написание на слух"
-          onClick={() => setMode('spell')}
+          onClick={() => selectMode('spell')}
         >
           Spell
           <span className="mode-k7">K7</span>
@@ -1996,7 +2022,7 @@ export default function SetPage() {
           aria-selected={mode === 'match'}
           className={'mode-btn' + (mode === 'match' ? ' active' : '')}
           title="Сопоставление на время"
-          onClick={() => setMode('match')}
+          onClick={() => selectMode('match')}
         >
           Match
           <span className="mode-k8">K8</span>
@@ -2007,7 +2033,7 @@ export default function SetPage() {
           aria-selected={mode === 'blast'}
           className={'mode-btn' + (mode === 'blast' ? ' active' : '')}
           title="Аркадная игра"
-          onClick={() => setMode('blast')}
+          onClick={() => selectMode('blast')}
         >
           Blast
           <span className="mode-k8">K8</span>
@@ -2217,6 +2243,35 @@ export default function SetPage() {
           </div>
         </div>
       )}
+
+      {/* K19: login gate for guests trying to start a training mode.
+          Guests may only VIEW cards; every other mode is blocked behind \"Войти\". */}
+      {gateOpen && (
+        <div className="modal-overlay" onClick={() => setGateOpen(false)} data-testid="login-gate">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal-title">Войдите, чтобы тренироваться</h2>
+            <p className="modal-note">
+              Без входа доступен только просмотр карточек. Режимы тренировки и весь прогресс
+              привязаны к вашему аккаунту.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="gate-login-btn"
+                onClick={() => { setGateOpen(false); setLoginOpen(true) }}
+              >
+                Войти / Регистрация
+              </button>
+              <button type="button" className="btn btn-outline" onClick={() => setGateOpen(false)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   )
 }

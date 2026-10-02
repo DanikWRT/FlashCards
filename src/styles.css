@@ -208,6 +208,13 @@ a {
   margin-top: 18px;
 }
 
+.modal-note {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted, inherit);
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;

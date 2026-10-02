@@ -10,6 +10,7 @@ import {
   bookmarkSetShared, unbookmarkSetShared, loadMySetIds,
 } from '../store.js'
 import { useAuth } from '../auth.jsx'
+import LoginModal from '../components/LoginModal.jsx'
 
 // Share of a set's cards currently mastered, as a percentage (rounded).
 function masteryOf(set) {
@@ -45,6 +46,8 @@ export default function MySets() {
   // K18: home page tabs ('mine' = user's own+bookmarked sets, 'all' = everything).
   const [tab, setTab] = useState('all')
   const [mySetIds, setMySetIds] = useState([])
+  // K19: quick login for guests (same modal as header).
+  const [loginOpen, setLoginOpen] = useState(false)
 
   // Folder UI state.
   const [newFolder, setNewFolder] = useState('')
@@ -200,14 +203,27 @@ export default function MySets() {
       <div className="page-head">
         <h1>Мои наборы</h1>
         <div className="page-head-actions">
-          {streak > 0 && (
-            <span className="k9-streak" title="Подряд дней занятий">
-              🔥 {streak} {streakWord(streak)}
-            </span>
+          {isLoggedIn ? (
+            <>
+              {streak > 0 && (
+                <span className="k9-streak" title="Подряд дней занятий">
+                  🔥 {streak} {streakWord(streak)}
+                </span>
+              )}
+              <button type="button" className="btn btn-outline" onClick={downloadProgressReport}>
+                Скачать отчёт
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="home-login-btn"
+              onClick={() => setLoginOpen(true)}
+            >
+              Войти, чтобы тренироваться
+            </button>
           )}
-          <button type="button" className="btn btn-outline" onClick={downloadProgressReport}>
-            Скачать отчёт
-          </button>
           <Link className="btn btn-primary" to="/sets/new">+ Импорт JSON</Link>
         </div>
       </div>
@@ -478,6 +494,8 @@ export default function MySets() {
           {displaySets.map(setCard)}
         </div>
       )}
+
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   )
 }
