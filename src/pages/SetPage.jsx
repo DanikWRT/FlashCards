@@ -1662,6 +1662,21 @@ function Blast({ set, id }) {
     }
   }
 
+  // The single progression step (advance to the next question). Reads live
+  // state from the blastState ref so the delayed correct-answer timer (in
+  // answer) always advances with the freshest level/pool/poolPos, and never
+  // double-advances out of 'playing'. Restored (was dropped in K27 leaving
+  // dangling references).
+  const advance = () => {
+    clearBlastFlash()
+    const { pool, poolPos, level, phase } = blastState.current
+    if (phase !== 'playing') return
+    const pos = poolPos + 1
+    setPoolPos(pos)
+    setFeedback(null)
+    launch(pool, pos, level)
+  }
+
   // K27: register advance handler for Enter key in feedback phase (wrong answers).
   useEffect(() => {
     advanceRegistry.handler = (feedback === 'wrong') ? advance : null
