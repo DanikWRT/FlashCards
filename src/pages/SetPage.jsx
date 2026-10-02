@@ -189,7 +189,11 @@ function buildQuestion(cards, cfg, cardIndex) {
   if (type === 'tf') {
     const { q } = sidesOf(card, dir)
     const truthful = Math.random() < 0.5
-    const other = pickOne(cards.filter((_, i) => i !== cardIndex))
+    // A 1-card set has no other card to draw a false statement from; fall back
+    // to the card's own answer so presented is always defined (safe: it is
+    // then truthful, so the answer is 'Да').
+    const others = cards.filter((_, i) => i !== cardIndex)
+    const other = others.length ? pickOne(others) : card
     const presented = truthful ? sidesOf(card, dir).a : sidesOf(other, dir).a
     return { type, cardIndex, prompt: q, presented, correct: truthful }
   }
