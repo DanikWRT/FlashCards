@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../auth.jsx'
 import LoginModal from '../components/LoginModal.jsx'
 import {
-  getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
+  getSet, getStatus, getStatuses, setCardStatus, recordCardView,
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
   resetSetProgress, downloadProgressReport, recordStudyDay,
   getCardStarred, toggleCardStarred, saveBlastScore, pushLeaderboard,

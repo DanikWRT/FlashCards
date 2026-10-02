@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   loadSets, removeSet, getDayStreak, getStatuses, downloadProgressReport,
-  loadFolders, saveFolders, addFolder, removeFolder, renameFolder,
+  loadFolders, addFolder, removeFolder, renameFolder,
   folderAssignSet, folderUnassignSet,
-  loadClasses, saveClasses, addClass, removeClass, renameClass,
+  loadClasses, addClass, removeClass, renameClass,
   classSetMember, classSetUnmember, buildLeaderboard,
   syncSetsFromServer, deleteSetShared,
   bookmarkSetShared, unbookmarkSetShared, loadMySetIds, apiGetLeaderboard,
