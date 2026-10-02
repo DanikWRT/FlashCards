@@ -110,8 +110,20 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS fc_users ("
             "username TEXT PRIMARY KEY, "
             "password_hash TEXT, "
-            "created TEXT"
+            "created TEXT, "
+            "role TEXT DEFAULT 'user'"
             ")"
+        )
+        # K21: backward-compatible migration for DBs created before the role
+        # column existed. Old rows default to 'user'.
+        try:
+            conn.execute("ALTER TABLE fc_users ADD COLUMN role TEXT DEFAULT 'user'")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        # K21: the administrator is the user who owns the nickname "Danya".
+        conn.execute(
+            "UPDATE fc_users SET role='admin' WHERE username='Danya' AND "
+            "(role IS NULL OR role='' OR role='user')"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS fc_sessions ("
@@ -277,6 +289,27 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
         return row["username"] if row else None
 
+    @staticmethod
+    def _is_admin(username):
+        """True if username is the administrator (role 'admin' in fc_users).
+
+        K21: the administrator is the user with the nickname "Danya". Both the
+        persisted role and the nickname are checked so a pre-existing member
+        named Danya who predates the role column still counts as admin.
+        """
+        if not username:
+            return False
+        if username == "Danya":
+            return True
+        conn = get_conn()
+        try:
+            row = conn.execute(
+                "SELECT role FROM fc_users WHERE username=?", (username,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return bool(row and row["role"] == "admin")
+
     def _auth_creds(self):
         """Validate {username,password} from the JSON body."""
         body = self._read_json_body()
@@ -420,9 +453,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json(409, {"ok": False, "error": "username taken"})
                     return
                 salt = _new_salt()
+                # K21: a user who registers with the nickname "Danya" becomes
+                # the administrator (role 'admin').
+                role = "admin" if username == "Danya" else "user"
                 conn.execute(
-                    "INSERT INTO fc_users (username, password_hash, created) VALUES (?, ?, ?)",
-                    (username, salt + ":" + _hash_password(password, salt), _now()),
+                    "INSERT INTO fc_users (username, password_hash, created, role) VALUES (?, ?, ?, ?)",
+                    (username, salt + ":" + _hash_password(password, salt), _now(), role),
                 )
                 conn.commit()
             finally:
@@ -618,15 +654,37 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "error": "not found"})
             return
         sid = self._set_id()
+        # K21: permission gate on deleting a set from the shared collection.
+        #   - anonymous: denied (401)
+        #   - admin (Danya): may delete any set
+        #   - any other logged-in user: may delete ONLY sets they authored
+        #     (author == username); deleting someone else's set -> 403.
+        # Removing a set from one's own list (unbookmark) is a separate call,
+        # DELETE /api/sets/{id}/bookmark, and stays open to any logged-in user.
+        username = self._acting_user()
+        if username is None:
+            self._send_json(401, {"ok": False, "error": "unauthorized"})
+            return
         conn = get_conn()
         try:
-            row = conn.execute("SELECT 1 FROM sets WHERE id=?", (sid,)).fetchone()
-            if row is not None:
-                conn.execute("DELETE FROM sets WHERE id=?", (sid,))
-                conn.commit()
-            else:
+            row = conn.execute(
+                "SELECT author FROM sets WHERE id=?", (sid,)
+            ).fetchone()
+            if row is None:
                 self._send_json(404, {"ok": False, "error": "not found"})
                 return
+            allowed = self._is_admin(username) or row["author"] == username
+            if not allowed:
+                self._send_json(
+                    403, {"ok": False, "error": "forbidden: only the author or admin can delete this set"}
+                )
+                return
+            # Remove the set and drop its references from my-sets/leaderboard so
+            # no stale bookmark or score points at a deleted set.
+            conn.execute("DELETE FROM sets WHERE id=?", (sid,))
+            conn.execute("DELETE FROM fc_my_sets WHERE set_id=?", (sid,))
+            conn.execute("DELETE FROM fc_leaderboard WHERE set_id=?", (sid,))
+            conn.commit()
         finally:
             conn.close()
         self._send_json(200, {"ok": True})

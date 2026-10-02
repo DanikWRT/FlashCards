@@ -51,6 +51,8 @@ function normBlast(r) {
 
 export default function MySets() {
   const { username, isLoggedIn } = useAuth()
+  // K21: the administrator (username "Danya") may delete any shared set.
+  const isAdmin = isLoggedIn && username === 'Danya'
   const [sets, setSets] = useState(loadSets)
   const [folders, setFolders] = useState(loadFolders)
   const [classes, setClasses] = useState(loadClasses)
@@ -126,8 +128,14 @@ export default function MySets() {
 
   const handleDelete = (id) => {
     // PRIO: delete on the server (shared), falling back to localStorage-only
-    // removal when the server is unreachable.
-    deleteSetShared(id).then(refresh)
+    // removal when the server is unreachable. A 403 from the K21 permission
+    // gate shows the user why the set stays.
+    deleteSetShared(id)
+      .then(refresh)
+      .catch((e) => {
+        console.warn('Delete failed', e)
+        window.alert('Удаление недоступно: только автор набора или администратор (Danya) может удалить этот набор.')
+      })
   }
 
   const handleCreateFolder = () => {
@@ -200,6 +208,10 @@ export default function MySets() {
     const pct = masteryOf(set)
     const isMine = myIds.has(set.id)
     const author = set.author ? set.author : '—'
+    // K21: a user may permanently delete a set only if they are its author
+    // or the administrator (Danya). Untitled guest/legacy sets (no author)
+    // can only be deleted by an admin.
+    const canDelete = isLoggedIn && (isAdmin || (set.author && set.author === username))
     return (
       <div className="set-card" key={set.id}>
         <div className="set-card-actions-top">
@@ -209,12 +221,20 @@ export default function MySets() {
             <span className="set-memory">Память: {pct}%</span>
             <span className="set-author">Автор: {author}</span>
           </Link>
-          <button className="btn-icon" title="Удалить" onClick={() => handleDelete(set.id)}>✕</button>
+          {canDelete && (
+            <button
+              className="btn-icon"
+              title="Удалить набор безвозвратно (только автор/администратор)"
+              onClick={() => handleDelete(set.id)}
+            >
+              ✕
+            </button>
+          )}
         </div>
         <div className="set-card-actions">
           {isLoggedIn && (isMine ? (
-            <button type="button" className="btn btn-outline" onClick={() => handleUnbookmark(set.id)}>
-              Убрать
+            <button type="button" className="btn btn-outline" title="Убрать из моей коллекции (набор останется в общих)" onClick={() => handleUnbookmark(set.id)}>
+              Удалить из моих
             </button>
           ) : (
             <button type="button" className="btn btn-outline" onClick={() => handleBookmark(set.id)}>

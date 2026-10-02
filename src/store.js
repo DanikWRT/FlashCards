@@ -162,12 +162,19 @@ export async function updateSetShared(id, obj) {
 
 // Persist a set DELETE: DELETE to the server, then always drop it from the
 // local cache so the UI reflects the removal. Falls back to localStorage-only
-// removal when the server is unreachable.
+// removal only when the SERVER IS UNREACHABLE (fetch network error). A real
+// HTTP error from the server (e.g. 401/403 from K21 permission gate) is
+// re-thrown so the caller can surface it and does NOT remove the set locally.
 export async function deleteSetShared(id) {
   try {
     await apiDeleteSet(id)
   } catch (e) {
-    console.warn('Server unreachable, deleted set locally only', e)
+    if (e instanceof TypeError) {
+      console.warn('Server unreachable, deleted set locally only', e)
+      removeSet(id)
+      return
+    }
+    throw e
   }
   removeSet(id)
 }
