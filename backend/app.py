@@ -33,7 +33,10 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
+import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -122,6 +125,10 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # column already exists
         # K21: the administrator is the user who owns the nickname "Danya".
+        # K28: this only promotes an EXISTING 'Danya' row. The promote-on-
+        # register self-escalation hole was closed (#6) so a new self-registered
+        # 'Danya' account is a plain 'user'; a pre-existing/local admin account
+        # named Danya still gets promoted here, preserving the K21 intent.
         conn.execute(
             "UPDATE fc_users SET role='admin' WHERE username='Danya' AND "
             "(role IS NULL OR role='' OR role='user')"
@@ -133,6 +140,13 @@ def init_db():
             "created TEXT"
             ")"
         )
+        # K28: purge expired sessions opportunistically at startup (30-day TTL).
+        try:
+            conn.execute(
+                "DELETE FROM fc_sessions WHERE created < ?", (_cutoff_iso(),)
+            )
+        except sqlite3.OperationalError:
+            pass  # table is brand-new / not yet populated
         # K20: shared leaderboard — one best result per (username, mode, set).
         # mode is 'match' (lower time = better) or 'blast' (higher score = better).
         conn.execute(
@@ -165,6 +179,54 @@ def _new_token():
     return secrets.token_hex(32)
 
 
+# ---------------- K28: session expiry & login/register rate limiting ----------------
+
+SESSION_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
+
+
+def _cutoff_iso():
+    """ISO-8601 (UTC) timestamp SESSION_TTL seconds in the past."""
+    return datetime.now(timezone.utc) - timedelta(seconds=SESSION_TTL_SECONDS)
+
+
+def _session_expired(created):
+    """True when an ISO-8601 session `created` stamp is older than the TTL.
+
+    Unparseable stamps are treated as expired (fail closed).
+    """
+    try:
+        stamp = datetime.fromisoformat(created)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - stamp).total_seconds() > SESSION_TTL_SECONDS
+    except (TypeError, ValueError):
+        return True
+
+
+# Simple in-memory throttle for /api/auth/login and /api/auth/register keyed by
+# client IP. Per-process only (fine for a single-process stdlib server); uses a
+# lock so it is safe under ThreadingHTTPServer.
+_RATE_MAX = 10        # allowed auth attempts
+_RATE_WINDOW = 60.0   # per 60-second sliding window
+_RATE_LOG = {}        # ip -> [monotonic timestamps]
+_RATE_LOCK = threading.Lock()
+
+
+def _rate_limited(ip):
+    """Record one auth attempt for `ip`; True if the budget is now exceeded."""
+    if not ip:
+        return True  # no client address -> be conservative
+    now = time.monotonic()
+    with _RATE_LOCK:
+        stamps = [s for s in _RATE_LOG.get(ip, []) if now - s < _RATE_WINDOW]
+        if len(stamps) >= _RATE_MAX:
+            _RATE_LOG[ip] = stamps
+            return True
+        stamps.append(now)
+        _RATE_LOG[ip] = stamps
+        return False
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "FCSets/1.0"
 
@@ -180,6 +242,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        # K28: baseline security headers on every response.
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'",
+        )
         self.end_headers()
         self.wfile.write(body)
 
@@ -227,10 +298,18 @@ class Handler(BaseHTTPRequestHandler):
         """Serve a file from dist/ verbatim; fall back to index.html (SPA)."""
         if path == "/" or path == "":
             path = "/index.html"
-        # Guard against path traversal.
+        # K28: guard against path traversal.
+        #  1) Reject any '..' path segment outright (escapes DIST_DIR, but also
+        #     defeats the startswith trick where a sibling dir named 'distX'
+        #     would pass the old prefix check).
+        #  2) Require the resolved path to live directly under DIST_DIR by
+        #     checking the dist root + os.sep (not a bare prefix).
         clean = os.path.normpath(unquote(path)).lstrip("/\\")
+        if ".." in clean.split(os.sep):
+            clean = "index.html"
         file_path = os.path.join(DIST_DIR, clean)
-        if not file_path.startswith(os.path.normpath(DIST_DIR)):
+        dist_root = os.path.normpath(DIST_DIR)
+        if file_path != dist_root and not file_path.startswith(dist_root + os.sep):
             file_path = os.path.join(DIST_DIR, "index.html")
         if os.path.isfile(file_path):
             ext = os.path.splitext(file_path)[1].lower()
@@ -277,15 +356,20 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def _acting_user(self):
-        """Resolve the username for a valid Bearer session token, else None."""
+        """Resolve the username for a valid, non-expired Bearer session, else None."""
         token = self._auth_bearer()
         if not token:
             return None
         conn = get_conn()
         try:
             row = conn.execute(
-                "SELECT username FROM fc_sessions WHERE token=?", (token,)
+                "SELECT username, created FROM fc_sessions WHERE token=?", (token,)
             ).fetchone()
+            if row is not None and _session_expired(row["created"]):
+                # K28: expired session -> drop it and treat as invalid.
+                conn.execute("DELETE FROM fc_sessions WHERE token=?", (token,))
+                conn.commit()
+                return None
         finally:
             conn.close()
         return row["username"] if row else None
@@ -294,14 +378,15 @@ class Handler(BaseHTTPRequestHandler):
     def _is_admin(username):
         """True if username is the administrator (role 'admin' in fc_users).
 
-        K21: the administrator is the user with the nickname "Danya". Both the
-        persisted role and the nickname are checked so a pre-existing member
-        named Danya who predates the role column still counts as admin.
+        K21/K28: admin is decided SOLELY by the persisted role, never by a
+        self-chosen username. A pre-existing local account named "Danya" is
+        promoted to 'admin' by init_db() at startup (so pre-role-column DBs
+        still get their Danya as admin), while a freshly self-registered
+        "Danya" keeps role 'user' and therefore has NO admin power. Checking
+        the nickname directly would re-open the self-promotion hole (#6).
         """
         if not username:
             return False
-        if username == "Danya":
-            return True
         conn = get_conn()
         try:
             row = conn.execute(
@@ -445,6 +530,10 @@ class Handler(BaseHTTPRequestHandler):
             if username is None:
                 self._send_json(400, {"ok": False, "error": "invalid body"})
                 return
+            # K28: throttle registration attempts per client IP.
+            if _rate_limited(self.client_address[0] if self.client_address else None):
+                self._send_json(429, {"ok": False, "error": "too many attempts"})
+                return
             conn = get_conn()
             try:
                 taken = conn.execute(
@@ -454,12 +543,13 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json(409, {"ok": False, "error": "username taken"})
                     return
                 salt = _new_salt()
-                # K21: a user who registers with the nickname "Danya" becomes
-                # the administrator (role 'admin').
-                role = "admin" if username == "Danya" else "user"
+                # K28 (#6): registration NEVER grants admin from a self-chosen
+                # username. Everyone (including a fresh 'Danya' sign-up) gets
+                # role 'user'. Admin is only ever established by the init_db()
+                # promotion of a pre-existing 'Danya' account.
                 conn.execute(
                     "INSERT INTO fc_users (username, password_hash, created, role) VALUES (?, ?, ?, ?)",
-                    (username, salt + ":" + _hash_password(password, salt), _now(), role),
+                    (username, salt + ":" + _hash_password(password, salt), _now(), "user"),
                 )
                 conn.commit()
             finally:
@@ -471,6 +561,10 @@ class Handler(BaseHTTPRequestHandler):
             username, password = self._auth_creds()
             if username is None:
                 self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            # K28: throttle login attempts per client IP (counts failures first).
+            if _rate_limited(self.client_address[0] if self.client_address else None):
+                self._send_json(429, {"ok": False, "error": "too many attempts"})
                 return
             conn = get_conn()
             try:
@@ -779,7 +873,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _now():
-    from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
 
 
