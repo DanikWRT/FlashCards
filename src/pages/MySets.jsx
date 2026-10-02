@@ -126,11 +126,15 @@ export default function MySets() {
     setClasses(loadClasses())
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = (set) => {
+    // K25: confirm before permanently deleting a set — the action is
+    // irreversible, and a single misclick used to wipe a whole set.
+    const topic = set.topic || 'Без названия'
+    if (!window.confirm(`Удалить набор «${topic}» навсегда? Это действие необратимо.`)) return
     // PRIO: delete on the server (shared), falling back to localStorage-only
     // removal when the server is unreachable. A 403 from the K21 permission
     // gate shows the user why the set stays.
-    deleteSetShared(id)
+    deleteSetShared(set.id)
       .then(refresh)
       .catch((e) => {
         console.warn('Delete failed', e)
@@ -225,7 +229,7 @@ export default function MySets() {
             <button
               className="btn-icon"
               title="Удалить набор безвозвратно (только автор/администратор)"
-              onClick={() => handleDelete(set.id)}
+              onClick={() => handleDelete(set)}
             >
               ✕
             </button>
