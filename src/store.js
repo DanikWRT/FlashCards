@@ -106,6 +106,17 @@ export async function apiDeleteSet(id) {
   return http(API_BASE + '/' + encodeURIComponent(id), { method: 'DELETE' })
 }
 
+// K22: append new cards to an EXISTING set on the server. Body { cards } is the
+// non-empty array of {word, translation, examples?, family?}. Returns
+// { id, added, cards, ok } from the server (added = cards actually appended;
+// duplicates are skipped server-side). Requires a valid Bearer session.
+export async function apiAddCards(id, cards) {
+  return http(API_BASE + '/' + encodeURIComponent(id) + '/cards', {
+    method: 'POST',
+    body: JSON.stringify({ cards }),
+  })
+}
+
 // Pull the shared set list from the server. On success the server becomes the
 // source of truth: the local cache is replaced with the server's sets and true
 // is returned. On failure (server unreachable) nothing changes locally and
@@ -177,6 +188,25 @@ export async function deleteSetShared(id) {
     throw e
   }
   removeSet(id)
+}
+
+// K22: persist new cards to an existing shared set. POSTs to the server, then
+// re-fetches the updated set and refreshes the local cache (loadSets/saveSets
+// map) so the server's appended cards show up. On a real HTTP error from the
+// server (401/403/404 e.g. the K22 permission gate) the error is RE-THROWN so
+// the caller can surface it and the local cache is NOT corrupted. Returns
+// { added, set } — the server-reported added count and the refreshed set.
+export async function addCardsShared(id, cards) {
+  let res
+  try {
+    res = await apiAddCards(id, cards)
+  } catch (e) {
+    console.warn('addCardsShared failed (not authorized?)', e)
+    throw e
+  }
+  const updated = await apiGetSet(id)
+  saveSets(loadSets().map((s) => (s.id === id ? updated : s)))
+  return { added: res.added, set: updated }
 }
 
 // ---------- K18 my-sets (bookmark) ----------
@@ -407,6 +437,22 @@ export function applySrsAnswer(setId, index, correct) {
     localStorage.setItem(key, JSON.stringify(stats))
   } catch (e) {
     console.error('Failed to save stats', e)
+  }
+}
+
+// K22: initialize per-user progress for freshly appended card indices ONLY
+// (oldCount .. oldCount+addedCount-1). Each new index becomes 'not_studied'
+// with an SRS entry due today (so a brand-new card is reviewable immediately).
+// Old card indices (existing statuses/stats) are left untouched. No-op when
+// nobody is logged in (progress disabled).
+export function initNewCardProgress(setId, oldCount, addedCount) {
+  if (!progressEnabled()) return
+  const newCount = (oldCount || 0) + (addedCount || 0)
+  for (let i = oldCount; i < newCount; i++) {
+    // 'not_studied' status + SRS interval 0 / nextReview=today via the same
+    // machinery used by study so semantics stay consistent.
+    setCardStatus(setId, i, 'not_studied')
+    applySrsAnswer(setId, i, false)
   }
 }
 

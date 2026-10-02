@@ -7,6 +7,7 @@ import {
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
   resetSetProgress, downloadProgressReport, recordStudyDay,
   getCardStarred, toggleCardStarred, saveBlastScore, pushLeaderboard,
+  addCardsShared, initNewCardProgress,
 } from '../store.js'
 import { matchAnswer } from '../normalize.js'
 
@@ -14,6 +15,51 @@ import { matchAnswer } from '../normalize.js'
 
 // Optional card image (K7 acceptance: a card MAY have an 'image' URL field).
 // Renders <img> with an onError fallback so a broken URL never breaks the deck.
+// K22: parse a paste of card JSON for the "+ Добавить карточки" inline form.
+// Accepts a JSON object with a `cards` array of {word, translation, examples?,
+// family?} — the same shape ImportPage uses but without topic/lesson_meta.
+function parseCardsOnly(text) {
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch (e) {
+    throw new Error('Некорректный JSON: ' + e.message)
+  }
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('JSON должен быть объектом с полем "cards".')
+  }
+  if (!Array.isArray(data.cards) || data.cards.length === 0) {
+    throw new Error('Нужно поле "cards" с массивом из одной или нескольких карточек.')
+  }
+  const cards = data.cards.map((card, i) => {
+    if (typeof card !== 'object' || card === null) {
+      throw new Error(`Карточка #${i + 1} не является объектом.`)
+    }
+    if (typeof card.word !== 'string' || !card.word.trim()) {
+      throw new Error(`У карточки #${i + 1} отсутствует или пусто поле "word".`)
+    }
+    if (typeof card.translation !== 'string' || !card.translation.trim()) {
+      throw new Error(`У карточки #${i + 1} (${card.word}) отсутствует или пусто поле "translation".`)
+    }
+    return {
+      word: card.word,
+      translation: card.translation,
+      examples: Array.isArray(card.examples) ? card.examples : [],
+      family: typeof card.family === 'string' ? card.family : undefined,
+    }
+  })
+  return { cards }
+}
+
+// K22: turn a thrown add-cards error into a user-facing Russian message.
+function addCardsErrorMsg(err) {
+  const msg = (err && err.message) || String(err)
+  if (/401/.test(msg)) return 'Войдите, чтобы добавить карточки.'
+  if (/403/.test(msg)) return 'Только автор или админ может добавлять карточки.'
+  if (/404/.test(msg)) return 'Набор не найден.'
+  return msg || 'Не удалось добавить карточки.'
+}
+
 function CardImage({ src }) {
   const [err, setErr] = useState(false)
   if (!src || err) return null
@@ -1593,8 +1639,15 @@ function KeyboardLegend() {
 export default function SetPage() {
   const { id } = useParams()
   const { isLoggedIn } = useAuth()
-  const [set] = useState(() => getSet(id))
+  // K22: `set` is re-readable via setSet (state) so the "+ Добавить карточки"
+  // flow can refresh the page set after cards are appended to the server.
+  const [set, setSet] = useState(() => getSet(id))
   const [mode, setMode] = useState('cards')
+  // K22: inline "add cards" form state.
+  const [showAdd, setShowAdd] = useState(false)
+  const [addText, setAddText] = useState('')
+  const [addMsg, setAddMsg] = useState('')
+  const [addError, setAddError] = useState('')
   // K19: guests may only VIEW cards. The other study modes (Learn, Write,
   // Тест, Spell, Match, Blast) plus all progress are login-gated.
   const LOGIN_MODES = ['learn', 'write', 'test', 'spell', 'match', 'blast']
@@ -1761,6 +1814,51 @@ export default function SetPage() {
     setOrder(buildDisplayOrder(usePriority, starredOnly))
     setPos(0)
     setFlipped(false)
+  }
+
+  // K22: reload the page set from the local cache (already refreshed by
+  // addCardsShared) and jump back to the cards view so newly added cards show
+  // at the end and the progress overview recomputes over the grown cards array.
+  const refreshSet = (newSet) => {
+    setSet(newSet)
+    setMode('cards')
+    const base = newSet.cards.map((_, i) => i)
+    setOrder([...base].sort((a, b) => {
+      const da = isDueOn(id, a, todayStr()) ? 0 : 1
+      const db = isDueOn(id, b, todayStr()) ? 0 : 1
+      if (da !== db) return da - db
+      if (priority) {
+        const va = getViews(id, a)
+        const vb = getViews(id, b)
+        if (va !== vb) return va - vb
+      }
+      return a - b
+    }))
+    setPos(0)
+    setFlipped(false)
+  }
+
+  // K22: submit the inline add-cards form. Parse -> POST to the server (with
+  // cache refresh) -> init per-user progress for the newly added indices ->
+  // reload the page view. A thrown 401/403/404 surfaces as the error message.
+  const handleAddCards = async () => {
+    setAddError('')
+    setAddMsg('')
+    if (!addText.trim()) {
+      setAddError('Вставьте JSON с карточками.')
+      return
+    }
+    try {
+      const oldCount = set ? set.cards.length : 0
+      const parsed = parseCardsOnly(addText)
+      const res = await addCardsShared(id, parsed.cards)
+      initNewCardProgress(id, oldCount, res.added)
+      refreshSet(res.set)
+      setAddMsg(`Добавлено ${res.added} карточек в набор.`)
+      setAddText('')
+    } catch (err) {
+      setAddError(addCardsErrorMsg(err))
+    }
   }
 
   // View counter: increments for the currently displayed ORIGINAL card index.
@@ -1944,6 +2042,37 @@ export default function SetPage() {
           🔗 Поделиться
         </button>
         {shareMsg && <div className="k11-share-msg" data-testid="share-msg">{shareMsg}</div>}
+        <button
+          type="button"
+          className="btn btn-outline k22-add-cards-btn"
+          onClick={() => { setAddError(''); setAddMsg(''); setShowAdd((v) => !v) }}
+          data-testid="add-cards-btn"
+        >
+          + Добавить карточки
+        </button>
+        {showAdd && (
+          <div className="k22-add-form" data-testid="add-cards-form">
+            <p className="k22-add-hint">Вставьте JSON с карточками:</p>
+            <textarea
+              className="json-input k22-add-input"
+              value={addText}
+              onChange={(e) => setAddText(e.target.value)}
+              rows={6}
+              placeholder={'{"cards": [{"word": "слово", "translation": "перевод"}]}'}
+              data-testid="add-cards-text"
+            />
+            <div className="k22-add-actions">
+              <button type="button" className="btn btn-primary" onClick={handleAddCards} data-testid="add-cards-submit">
+                Добавить
+              </button>
+              <button type="button" className="btn btn-outline" onClick={() => setShowAdd(false)}>
+                Отмена
+              </button>
+            </div>
+            {addError && <div className="error" data-testid="add-cards-error">{addError}</div>}
+            {addMsg && <div className="success" data-testid="add-cards-msg">{addMsg}</div>}
+          </div>
+        )}
       </div>
 
       {set.lesson_meta && (set.lesson_meta.song || (set.lesson_meta.grammar && set.lesson_meta.grammar.length > 0)) && (

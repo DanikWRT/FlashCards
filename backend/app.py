@@ -18,6 +18,7 @@ GET    /api/sets/{id}   -> a single set object
 POST   /api/sets        -> create {topic, lesson_meta, cards} -> {id, ok:true}
 PUT    /api/sets/{id}   -> update -> {id, ok:true}
 DELETE /api/sets/{id}   -> delete -> {ok:true}
+POST   /api/sets/{id}/cards -> append {cards:[{word,translation,examples?,family?}]} -> {id, added, cards, ok}
 POST   /api/auth/register {username,password} -> {token, username} (409 if taken)
 POST   /api/auth/login    {username,password} -> {token, username} (401 bad creds)
 POST   /api/auth/logout   Bearer token        -> {ok:true}
@@ -576,6 +577,93 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             self._send_json(200, {"ok": True})
+            return
+        # K22: POST /api/sets/{id}/cards — append new cards to an EXISTING set.
+        # Requires a valid Bearer session. Authorization mirrors the K21 DELETE
+        # gate exactly: anonymous -> 401, set missing -> 404, non-author
+        # non-admin -> 403; admin (Danya) or the set's author allowed. New cards
+        # are deduplicated by lowercased `word` against existing words AND within
+        # the incoming batch (first occurrence wins). The existing
+        # topic/lesson_meta/author are preserved.
+        if path.startswith("/api/sets/") and path.endswith("/cards"):
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            sid = unquote(path[len("/api/sets/"):-len("/cards")])
+            body = self._read_json_body()
+            if (
+                not isinstance(body, dict)
+                or not isinstance(body.get("cards"), list)
+                or not body["cards"]
+            ):
+                self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            conn = get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT json, author FROM sets WHERE id=?", (sid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if row is None:
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
+            allowed = self._is_admin(username) or row["author"] == username
+            if not allowed:
+                self._send_json(403, {"ok": False, "error": "forbidden: only the author or admin can add cards to this set"})
+                return
+            # Validate every incoming card: needs a non-empty word + translation.
+            parsed = []
+            for card in body["cards"]:
+                if not isinstance(card, dict):
+                    self._send_json(400, {"ok": False, "error": "invalid body"})
+                    return
+                word = card.get("word")
+                translation = card.get("translation")
+                if (
+                    not isinstance(word, str) or not word.strip()
+                    or not isinstance(translation, str) or not translation.strip()
+                ):
+                    self._send_json(400, {"ok": False, "error": "invalid body"})
+                    return
+                newcard = {"word": word, "translation": translation}
+                if isinstance(card.get("examples"), list):
+                    newcard["examples"] = card["examples"]
+                if isinstance(card.get("family"), str):
+                    newcard["family"] = card["family"]
+                parsed.append(newcard)
+            obj = json.loads(row["json"])
+            existing = obj.get("cards", []) if isinstance(obj, dict) else []
+            seen = {
+                c["word"].strip().lower()
+                for c in existing
+                if isinstance(c, dict) and isinstance(c.get("word"), str) and c["word"].strip()
+            }
+            added = []
+            for card in parsed:
+                key = card["word"].strip().lower()
+                if key and key not in seen:
+                    seen.add(key)
+                    added.append(card)
+            # Preserve the existing set shape (topic/lesson_meta/author intact);
+            # only the cards array grows.
+            obj["cards"] = existing + added
+            conn = get_conn()
+            try:
+                conn.execute(
+                    "UPDATE sets SET json=? WHERE id=?",
+                    (json.dumps(obj, ensure_ascii=False), sid),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            self._send_json(200, {
+                "id": sid,
+                "added": len(added),
+                "cards": len(obj["cards"]),
+                "ok": True,
+            })
             return
         if path != "/api/sets":
             self._send_json(404, {"ok": False, "error": "not found"})
