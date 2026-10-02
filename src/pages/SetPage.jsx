@@ -884,32 +884,6 @@ function useStudySession(set, id, externalDirection, externalSetDirection) {
   }
 }
 
-// Shared direction switcher used by Learn and Write (like Quiz's).
-function StudyDirection({ direction, setDirection }) {
-  return (
-    <div className="quiz-direction" role="tablist" aria-label="Направление">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={direction === 'en-ru'}
-        className={'quiz-dir-btn' + (direction === 'en-ru' ? ' active' : '')}
-        onClick={() => setDirection('en-ru')}
-      >
-        en-ru
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={direction === 'ru-en'}
-        className={'quiz-dir-btn' + (direction === 'ru-en' ? ' active' : '')}
-        onClick={() => setDirection('ru-en')}
-      >
-        ru-en
-      </button>
-    </div>
-  )
-}
-
 // Progress bar + mastered counter, shared by Learn/Write.
 function StudyProgress({ mastered, total }) {
   const pct = total ? Math.round((mastered / total) * 100) : 0
