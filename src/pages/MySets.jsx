@@ -7,7 +7,7 @@ import {
   loadClasses, saveClasses, addClass, removeClass, renameClass,
   classSetMember, classSetUnmember, buildLeaderboard,
   syncSetsFromServer, deleteSetShared,
-  bookmarkSetShared, unbookmarkSetShared, loadMySetIds,
+  bookmarkSetShared, unbookmarkSetShared, loadMySetIds, apiGetLeaderboard,
 } from '../store.js'
 import { useAuth } from '../auth.jsx'
 import LoginModal from '../components/LoginModal.jsx'
@@ -35,6 +35,18 @@ function fmtMs(ms) {
   const m = Math.floor(totalSec / 60)
   const s = (totalSec % 60).toFixed(1)
   return m + ':' + String(s).padStart(4, '0')
+}
+
+// K20: normalize one leaderboard row into { key, topic, value, username }. The
+// server returns {username, set_id, topic, value, date}; the local fallback
+// (buildLeaderboard) returns {setId, topic, ms|score, date, username}. Both are
+// mapped here so the render uses a single shape. value is seconds-based for
+// Match (min wins) and a plain score for Blast (max wins).
+function normMatch(r) {
+  return { key: r.set_id || r.setId || r.topic, topic: r.topic, value: r.ms != null ? r.ms : r.value, username: r.username || '-' }
+}
+function normBlast(r) {
+  return { key: r.set_id || r.setId || r.topic, topic: r.topic, value: r.score != null ? r.score : r.value, username: r.username || '-' }
 }
 
 export default function MySets() {
@@ -73,6 +85,27 @@ export default function MySets() {
     return () => { cancelled = true }
   }, [])
 
+  // K20: load the SHARED leaderboard (nicknames of who earned each result).
+  // When the server is unreachable, fall back to the local-only aggregation
+  // (buildLeaderboard) so existing behavior is preserved offline.
+  useEffect(() => {
+    let cancelled = false
+    apiGetLeaderboard()
+      .then((data) => {
+        if (cancelled) return
+        if (data && Array.isArray(data.match) && Array.isArray(data.blast)) {
+          setLeaderboard({
+            match: data.match.map(normMatch),
+            blast: data.blast.map(normBlast),
+          })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLeaderboard(buildLeaderboard())
+      })
+    return () => { cancelled = true }
+  }, [])
+
   // K18: load the ids the current user owns+bookmarked whenever login changes.
   useEffect(() => {
     if (!isLoggedIn) {
@@ -89,7 +122,6 @@ export default function MySets() {
     if (isLoggedIn) loadMySetIds().then(setMySetIds)
     setFolders(loadFolders())
     setClasses(loadClasses())
-    setLeaderboard(buildLeaderboard())
   }
 
   const handleDelete = (id) => {
@@ -238,13 +270,14 @@ export default function MySets() {
               <p className="k11-lb-empty">Нет записей. Сыграйте в Match!</p>
             ) : (
               <table className="k11-lb-table">
-                <thead><tr><th>#</th><th>Набор</th><th>Время</th></tr></thead>
+                <thead><tr><th>#</th><th>Игрок</th><th>Набор</th><th>Время</th></tr></thead>
                 <tbody>
                   {leaderboard.match.map((r, i) => (
-                    <tr key={r.setId + i}>
+                    <tr key={r.key + i}>
                       <td>{i + 1}</td>
-                      <td><Link to={`/set/${r.setId}`}>{r.topic}</Link></td>
-                      <td className="k11-lb-val">{fmtMs(r.ms)}</td>
+                      <td className="k11-lb-name">{r.username}</td>
+                      <td><Link to={`/set/${r.key}`}>{r.topic}</Link></td>
+                      <td className="k11-lb-val">{fmtMs(r.value)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -257,13 +290,14 @@ export default function MySets() {
               <p className="k11-lb-empty">Нет записей. Сыграйте в Blast!</p>
             ) : (
               <table className="k11-lb-table">
-                <thead><tr><th>#</th><th>Набор</th><th>Очки</th></tr></thead>
+                <thead><tr><th>#</th><th>Игрок</th><th>Набор</th><th>Очки</th></tr></thead>
                 <tbody>
                   {leaderboard.blast.map((r, i) => (
-                    <tr key={r.setId + i}>
+                    <tr key={r.key + i}>
                       <td>{i + 1}</td>
-                      <td><Link to={`/set/${r.setId}`}>{r.topic}</Link></td>
-                      <td className="k11-lb-val">{r.score}</td>
+                      <td className="k11-lb-name">{r.username}</td>
+                      <td><Link to={`/set/${r.key}`}>{r.topic}</Link></td>
+                      <td className="k11-lb-val">{r.value}</td>
                     </tr>
                   ))}
                 </tbody>

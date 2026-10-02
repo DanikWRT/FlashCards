@@ -299,7 +299,9 @@ export function saveRecord(setId, ms) {
   const prev = getRecord(setId)
   if (prev && prev.ms <= ms) return false
   try {
-    localStorage.setItem(recordKey(setId), JSON.stringify({ ms, date: new Date().toISOString() }))
+    localStorage.setItem(recordKey(setId), JSON.stringify({
+      ms, date: new Date().toISOString(), username: progressUser,
+    }))
   } catch (e) {
     console.error('Failed to save record', e)
     return false
@@ -698,7 +700,9 @@ export function saveBlastScore(setId, score) {
   const prev = getBlastScore(setId)
   if (prev && prev.score >= score) return false
   try {
-    localStorage.setItem(blastKey(setId), JSON.stringify({ score, date: new Date().toISOString() }))
+    localStorage.setItem(blastKey(setId), JSON.stringify({
+      score, date: new Date().toISOString(), username: progressUser,
+    }))
   } catch (e) {
     console.error('Failed to save blast score', e)
     return false
@@ -706,10 +710,12 @@ export function saveBlastScore(setId, score) {
   return true
 }
 
-// ---------- K11 leaderboard aggregation ----------
+// ---------- K11 leaderboard aggregation (LOCAL fallback only) ----------
 // Combine every set's Match best-time record (fc_records_<id>) and Blast best
-// score (fc_blast_<id>) into two top-5 lists: fastest Match times ascending and
-// highest Blast scores descending, each annotated with its owning set's topic.
+// score (fc_blast_<id>) into two top-5 lists. Used only as a fallback when the
+// shared server leaderboard (see K20 below) is unreachable. Each entry carries
+// the owning username (stored since K20; older records have none -> caller
+// renders "-").
 export function buildLeaderboard() {
   const sets = loadSets()
   const match = []
@@ -717,11 +723,43 @@ export function buildLeaderboard() {
   for (const s of sets) {
     const topic = s.topic || 'Без названия'
     const rec = getRecord(s.id)
-    if (rec && rec.ms != null) match.push({ setId: s.id, topic, ms: rec.ms, date: rec.date })
+    if (rec && rec.ms != null) match.push({ setId: s.id, topic, ms: rec.ms, date: rec.date, username: rec.username })
     const b = getBlastScore(s.id)
-    if (b && b.score != null) blast.push({ setId: s.id, topic, score: b.score, date: b.date })
+    if (b && b.score != null) blast.push({ setId: s.id, topic, score: b.score, date: b.date, username: b.username })
   }
   match.sort((a, b) => a.ms - b.ms)
   blast.sort((a, b) => b.score - a.score)
   return { match: match.slice(0, 5), blast: blast.slice(0, 5) }
+}
+
+// ---------- K20 shared server leaderboard (linked to nicknames) ----------
+// Records live on the server (fc_leaderboard table) so results are COMMON to
+// all users and carry the owner's username. GET is public (guests can read);
+// POST requires a logged-in session. The http() helper attaches the Bearer
+// token and throws on non-ok, so callers fall back silently.
+
+const LB_BASE = '/api/leaderboard'
+
+// Fetch the shared leaderboard: { match: [{username,set_id,topic,value,date}], blast: [...] }.
+export async function apiGetLeaderboard() {
+  return http(LB_BASE)
+}
+
+// Record/update the current user's best result for a set+mode on the server.
+export async function apiSaveLeaderboard(set_id, mode, value) {
+  return http(LB_BASE, { method: 'POST', body: JSON.stringify({ set_id, mode, value }) })
+}
+
+// Fire a finished best Match/Blast result to the shared leaderboard. A no-op
+// and resolves false when nobody is logged in (progress disabled); resolves
+// false on a network/HTTP failure so the game is never interrupted.
+export async function pushLeaderboard(set_id, mode, value) {
+  if (!progressEnabled()) return false
+  try {
+    await apiSaveLeaderboard(set_id, mode, value)
+    return true
+  } catch (e) {
+    console.warn('Leaderboard push failed', e)
+    return false
+  }
 }

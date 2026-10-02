@@ -22,6 +22,8 @@ POST   /api/auth/register {username,password} -> {token, username} (409 if taken
 POST   /api/auth/login    {username,password} -> {token, username} (401 bad creds)
 POST   /api/auth/logout   Bearer token        -> {ok:true}
 GET    /api/me            Bearer token        -> {username} (401 if invalid)
+GET    /api/leaderboard                       -> {match:[top-5], blast:[top-5]} w/ username+topic
+POST   /api/leaderboard   Bearer {set_id,mode,value} -> {ok:true} (best-kept per user+set+mode)
 anything else           -> static file from dist/ (else index.html SPA fallback)
 """
 
@@ -116,6 +118,18 @@ def init_db():
             "token TEXT PRIMARY KEY, "
             "username TEXT, "
             "created TEXT"
+            ")"
+        )
+        # K20: shared leaderboard — one best result per (username, mode, set).
+        # mode is 'match' (lower time = better) or 'blast' (higher score = better).
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS fc_leaderboard ("
+            "username TEXT, "
+            "mode TEXT, "
+            "set_id TEXT, "
+            "value REAL, "
+            "date TEXT, "
+            "PRIMARY KEY (username, mode, set_id)"
             ")"
         )
         conn.commit()
@@ -317,6 +331,54 @@ class Handler(BaseHTTPRequestHandler):
             ids = [r["set_id"] for r in rows]
             self._send_json(200, {"ids": ids})
             return
+        # K20: GET /api/leaderboard — top-5 Match (fastest time) and top-5 Blast
+        # (highest score) across ALL users, each with the owning user's nickname
+        # and the set's topic. Readable by anyone (logged-in or guest).
+        if path == "/api/leaderboard":
+            conn = get_conn()
+            try:
+                match_rows = conn.execute(
+                    "SELECT username, set_id, value, date FROM fc_leaderboard "
+                    "WHERE mode='match' ORDER BY value ASC LIMIT 5"
+                ).fetchall()
+                blast_rows = conn.execute(
+                    "SELECT username, set_id, value, date FROM fc_leaderboard "
+                    "WHERE mode='blast' ORDER BY value DESC LIMIT 5"
+                ).fetchall()
+                # Resolve each set's topic for display.
+                topics = {}
+                for r in list(match_rows) + list(blast_rows):
+                    sid = r["set_id"]
+                    if sid in topics:
+                        continue
+                    row = conn.execute(
+                        "SELECT json FROM sets WHERE id=?", (sid,)
+                    ).fetchone()
+                    if row is not None:
+                        try:
+                            topics[sid] = json.loads(row["json"]).get("topic", "")
+                        except (ValueError, TypeError):
+                            topics[sid] = ""
+                    else:
+                        topics[sid] = ""
+            finally:
+                conn.close()
+            match = [{
+                "username": r["username"],
+                "set_id": r["set_id"],
+                "topic": topics.get(r["set_id"], "") or "Без названия",
+                "value": r["value"],
+                "date": r["date"],
+            } for r in match_rows]
+            blast = [{
+                "username": r["username"],
+                "set_id": r["set_id"],
+                "topic": topics.get(r["set_id"], "") or "Без названия",
+                "value": r["value"],
+                "date": r["date"],
+            } for r in blast_rows]
+            self._send_json(200, {"match": match, "blast": blast})
+            return
         if path == "/api/sets":
             conn = get_conn()
             try:
@@ -401,6 +463,61 @@ class Handler(BaseHTTPRequestHandler):
                     conn.commit()
                 finally:
                     conn.close()
+            self._send_json(200, {"ok": True})
+            return
+        # K20: POST /api/leaderboard — record/update the acting user's best
+        # result for a set+mode (requires a valid Bearer session; a guest cannot
+        # write). Body {set_id, mode ('match'|'blast'), value}. Per user+set+mode
+        # only an improvement overwrites the stored value (match: lower time is
+        # better; blast: higher score is better).
+        if path == "/api/leaderboard":
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            body = self._read_json_body()
+            if not isinstance(body, dict):
+                self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            set_id = body.get("set_id")
+            mode = body.get("mode")
+            value = body.get("value")
+            if (
+                not isinstance(set_id, str) or not set_id
+                or mode not in ("match", "blast")
+                or not isinstance(value, (int, float))
+            ):
+                self._send_json(400, {"ok": False, "error": "invalid body"})
+                return
+            if self._api_json(set_id) is None:
+                self._send_json(404, {"ok": False, "error": "set not found"})
+                return
+            value = float(value)
+            conn = get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT value FROM fc_leaderboard "
+                    "WHERE username=? AND mode=? AND set_id=?",
+                    (username, mode, set_id),
+                ).fetchone()
+                if row is not None:
+                    existing = row["value"]
+                    better = value < existing if mode == "match" else value > existing
+                    if better:
+                        conn.execute(
+                            "UPDATE fc_leaderboard SET value=?, date=? "
+                            "WHERE username=? AND mode=? AND set_id=?",
+                            (value, _now(), username, mode, set_id),
+                        )
+                else:
+                    conn.execute(
+                        "INSERT INTO fc_leaderboard (username, mode, set_id, value, date) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (username, mode, set_id, value, _now()),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
             self._send_json(200, {"ok": True})
             return
         # K18: POST /api/sets/{id}/bookmark adds a set to the acting user's list.

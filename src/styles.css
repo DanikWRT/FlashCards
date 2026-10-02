@@ -1863,6 +1863,12 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.k11-lb-name {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .k11-create-row {
   display: flex;
   gap: 10px;

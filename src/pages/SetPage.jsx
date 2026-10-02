@@ -6,7 +6,7 @@ import {
   getSet, getStats, getStatus, getStatuses, setCardStatus, recordCardView,
   getRecord, saveRecord, getViews, applySrsAnswer, isDueOn, todayStr,
   resetSetProgress, downloadProgressReport, recordStudyDay,
-  getCardStarred, toggleCardStarred, saveBlastScore,
+  getCardStarred, toggleCardStarred, saveBlastScore, pushLeaderboard,
 } from '../store.js'
 import { matchAnswer } from '../normalize.js'
 
@@ -1260,6 +1260,8 @@ function Match({ set, id }) {
     const finalElapsed = Date.now() - startAt
     setElapsed(finalElapsed)
     const isNew = saveRecord(id, finalElapsed)
+    // K20: share a new best Match time with the server leaderboard (nickname).
+    if (isNew) pushLeaderboard(id, 'match', finalElapsed)
     setNewRecord(isNew)
     setBest(getRecord(id))
     setPhase('done')
@@ -1379,7 +1381,9 @@ function Blast({ set, id }) {
 
   // K11: persist the best Blast score so it can appear on the leaderboard.
   useEffect(() => {
-    if (phase === 'done') saveBlastScore(id, score)
+    if (phase !== 'done') return
+    // K20: share a new Blast best with the server leaderboard (nickname).
+    if (saveBlastScore(id, score)) pushLeaderboard(id, 'blast', score)
   }, [phase, id, score])
 
   const roundsPerLevel = (lvl) => Math.min(3 + lvl, n)
