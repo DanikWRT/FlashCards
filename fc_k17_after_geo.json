@@ -1,0 +1,49 @@
+{
+  "sidebar": {
+    "top": 50,
+    "bottom": 491,
+    "left": 28,
+    "right": 278,
+    "w": 250,
+    "h": 441
+  },
+  "main": {
+    "top": 50,
+    "bottom": 794,
+    "left": 294,
+    "right": 1228,
+    "w": 934,
+    "h": 744
+  },
+  "stage": {
+    "top": 104,
+    "bottom": 541,
+    "left": 294,
+    "right": 1228,
+    "w": 934,
+    "h": 437
+  },
+  "legend": {
+    "top": 555,
+    "bottom": 794,
+    "left": 294,
+    "right": 674,
+    "w": 380,
+    "h": 239
+  },
+  "header": {
+    "top": 0,
+    "bottom": 44,
+    "left": 0,
+    "right": 1280,
+    "w": 1280,
+    "h": 44
+  },
+  "sidebarComputedPosition": "sticky",
+  "legendAfterStage": true,
+  "viewport": {
+    "w": 1280,
+    "h": 768
+  },
+  "docH": 804
+}

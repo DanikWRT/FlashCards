@@ -1,0 +1,11 @@
+{
+  "headerBeforeStyle": "flex",
+  "headerToggleExists": true,
+  "appClass": "app header-collapsed",
+  "headerDisplayAfter": "hidden-header",
+  "headerShowExists": true,
+  "sidebarTopCollapsed": 6,
+  "headerDisplayRestored": "flex",
+  "headerShowGoneAfterRestore": true,
+  "lsAfter": "0"
+}

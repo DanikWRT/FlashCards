@@ -1373,6 +1373,12 @@ h1 {
   width: 100%;
 }
 
+.match-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .match-item {
   display: flex;
   flex-direction: column;

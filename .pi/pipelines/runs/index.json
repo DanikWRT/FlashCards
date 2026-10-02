@@ -1,0 +1,12 @@
+[
+  {
+    "runId": "20261003-000731-6dvqes",
+    "pipelineName": "dev-sprint-headless",
+    "task": "Implement K27 UX cleanup per pi_k27_prompt.md: move StudyDirection+shuffle from Learn field into settings panel, Enter for Далее in all modes, two-column matching EN|RU, autofocus on new question.",
+    "startedAt": "2026-10-02T20:07:31.158Z",
+    "status": "failed",
+    "success": false,
+    "totalDurationMs": 8,
+    "stageCount": 1
+  }
+]

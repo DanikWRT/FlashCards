@@ -18,8 +18,12 @@ import { matchAnswer } from '../normalize.js'
 //   answerRegistry.handlers : array of () => void, one per visible answer button
 //                             (index n <-> digit key n+1).
 //   matchRegistry           : Match mode's live handler for digit+letter pairing.
+//   studyRegistry           : study-mode (Learn/Write/Spell) shuffle handler.
+//   advanceRegistry         : study-mode advance (Далее) handler for Enter key.
 const answerRegistry = { handlers: [] }
 const matchRegistry = { active: false, handle: null }
+const studyRegistry = { shuffleNow: null }
+const advanceRegistry = { handler: null }
 
 // ---------- K10 flashcard helpers ----------
 
@@ -323,6 +327,18 @@ function ExtendedTest({ set, id }) {
   }
 
   // ---- Settings screen (before start) ----
+  // K27: register advance handler for Enter key in feedback phase.
+  useEffect(() => {
+    advanceRegistry.handler = feedback ? next : null
+    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
+  }, [feedback, next])
+
+  // K27: register advance handler for Enter key in feedback phase.
+  useEffect(() => {
+    advanceRegistry.handler = feedback ? next : null
+    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
+  }, [feedback, next])
+
   if (!started) {
     const toggleType = (tid) =>
       setCfg((c) => ({
@@ -666,6 +682,11 @@ function MatchingQuestion({ q, feedback, pairs, setPairs, selLeft, setSelLeft, o
     onCheck(correctIdxs, wrongEntries)
     setSelLeft(null)
   }
+  // K27: register check handler for Enter when all pairs made, no feedback.
+  useEffect(() => {
+    advanceRegistry.handler = (!feedback && leftAllPaired) ? check : null
+    return () => { if (advanceRegistry.handler === check) advanceRegistry.handler = null }
+  }, [feedback, leftAllPaired, check])
   return (
     <>
       <div className="quiz-card match-head">
@@ -673,49 +694,52 @@ function MatchingQuestion({ q, feedback, pairs, setPairs, selLeft, setSelLeft, o
         <p className="match-desc">{q.left.length} пар. Нажмите слева, затем справа.</p>
       </div>
       <div className="match-board">
-        {q.left.map((l) => {
-          const matched = pairs[l.idx]
-          const isSel = selLeft === l.idx
-          let cls = 'match-item left' + (isSel ? ' selected' : '') + (matched !== undefined ? ' matched' : '')
-          if (feedback && matched !== undefined) cls += matched === l.idx ? ' ok' : ' bad'
-          return (
-            <button
-              key={'L' + l.idx}
-              type="button"
-              className={cls}
-              data-cardidx={l.idx}
-              disabled={feedback}
-              onClick={() => setSelLeft(isSel ? null : l.idx)}
-            >
-              <span className="match-label">{l.label}</span>
-              {matched !== undefined && (
-                <span className="match-link">→ {q.right.find((r) => r.idx === matched).label}</span>
-              )}
-            </button>
-          )
-        })}
-
-        {q.right.map((r) => {
-          const usedBy = Object.keys(pairs).find((k) => pairs[k] === r.idx)
-          let cls = 'match-item right' + (usedBy !== undefined ? ' used' : '')
-          if (feedback && usedBy !== undefined) cls += String(r.idx) === usedBy ? ' ok' : ' bad'
-          return (
-            <button
-              key={'R' + r.idx}
-              type="button"
-              className={cls}
-              data-cardidx={r.idx}
-              disabled={feedback || usedBy !== undefined}
-              onClick={() => {
-                if (selLeft === null) return
-                setPairs((p) => ({ ...p, [selLeft]: r.idx }))
-                setSelLeft(null)
-              }}
-            >
-              <span className="match-label">{r.label}</span>
-            </button>
-          )
-        })}
+        <div className="match-col">
+          {q.left.map((l) => {
+            const matched = pairs[l.idx]
+            const isSel = selLeft === l.idx
+            let cls = 'match-item left' + (isSel ? ' selected' : '') + (matched !== undefined ? ' matched' : '')
+            if (feedback && matched !== undefined) cls += matched === l.idx ? ' ok' : ' bad'
+            return (
+              <button
+                key={'L' + l.idx}
+                type="button"
+                className={cls}
+                data-cardidx={l.idx}
+                disabled={feedback}
+                onClick={() => setSelLeft(isSel ? null : l.idx)}
+              >
+                <span className="match-label">{l.label}</span>
+                {matched !== undefined && (
+                  <span className="match-link">→ {q.right.find((r) => r.idx === matched).label}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        <div className="match-col">
+          {q.right.map((r) => {
+            const usedBy = Object.keys(pairs).find((k) => pairs[k] === r.idx)
+            let cls = 'match-item right' + (usedBy !== undefined ? ' used' : '')
+            if (feedback && usedBy !== undefined) cls += String(r.idx) === usedBy ? ' ok' : ' bad'
+            return (
+              <button
+                key={'R' + r.idx}
+                type="button"
+                className={cls}
+                data-cardidx={r.idx}
+                disabled={feedback || usedBy !== undefined}
+                onClick={() => {
+                  if (selLeft === null) return
+                  setPairs((p) => ({ ...p, [selLeft]: r.idx }))
+                  setSelLeft(null)
+                }}
+              >
+                <span className="match-label">{r.label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
       {!feedback && leftAllPaired && (
         <button type="button" className="btn btn-primary quiz-next" onClick={check}>
@@ -790,10 +814,14 @@ function countMastered(id, cards) {
 // Tracks a per-session consecutive-correct streak per card: 2 in a row -> mastered,
 // any error -> learning. Queue is advanced on `advance()`; mastered cards leave the
 // queue, un-mastered ones go back to the end so difficult cards get repeated.
-function useStudySession(set, id) {
+// Accepts optional external direction/setDirection so the parent (SetPage) can
+// own the direction state and bind it to the settings panel.
+function useStudySession(set, id, externalDirection, externalSetDirection) {
   const cards = set.cards
   const n = cards.length
-  const [direction, setDirection] = useState('en-ru')
+  const [direction, setDirection] = externalDirection !== undefined
+    ? [externalDirection, externalSetDirection]
+    : useState('en-ru')
   const [queue, setQueue] = useState(() => initialQueue(id, cards))
   const [streaks, setStreaks] = useState({})
   const [masteredCount, setMasteredCount] = useState(() => countMastered(id, cards))
@@ -963,6 +991,18 @@ function Learn({ set, id }) {
     return () => { answerRegistry.handlers = [] }
   }, [choices, phase])
 
+  // K27: register advance handler for Enter key in feedback phase.
+  useEffect(() => {
+    advanceRegistry.handler = phase === 'feedback' ? next : null
+    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
+  }, [phase, next])
+
+  // K27: register shuffle handler for settings-panel shuffle button.
+  useEffect(() => {
+    studyRegistry.shuffleNow = running ? s.shuffleNow : null
+    return () => { if (studyRegistry.shuffleNow === s.shuffleNow) studyRegistry.shuffleNow = null }
+  }, [running, s.shuffleNow])
+
   if (masteredCount >= n) {
     return <StudyDone label="Обучение завершено" onRestart={s.restart} />
   }
@@ -1019,12 +1059,18 @@ function Learn({ set, id }) {
 }
 
 // K6 WRITE (typed active recall) --------------------------------------------------
-function Write({ set, id }) {
-  const s = useStudySession(set, id)
+function Write({ set, id, studyDirection, setStudyDirection }) {
+  const s = useStudySession(set, id, studyDirection, setStudyDirection)
   const { direction, setDirection, card, masteredCount, n, running } = s
   const [input, setInput] = useState('')
+  const inputRef = useRef(null)
   const [phase, setPhase] = useState('question')
   const [result, setResult] = useState(null)
+
+  // K27: autofocus input when transitioning to question phase.
+  useEffect(() => {
+    if (phase === 'question' && inputRef.current) inputRef.current.focus()
+  }, [phase])
 
   const prompt = card ? (direction === 'en-ru' ? card.word : card.translation) : ''
   const correct = card ? (direction === 'en-ru' ? card.translation : card.word) : ''
@@ -1052,6 +1098,18 @@ function Write({ set, id }) {
     }
   }
 
+  // K27: register advance handler for Enter key in feedback phase.
+  useEffect(() => {
+    advanceRegistry.handler = phase === 'feedback' ? next : null
+    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
+  }, [phase, next])
+
+  // K27: register shuffle handler for settings-panel shuffle button.
+  useEffect(() => {
+    studyRegistry.shuffleNow = running ? s.shuffleNow : null
+    return () => { if (studyRegistry.shuffleNow === s.shuffleNow) studyRegistry.shuffleNow = null }
+  }, [running, s.shuffleNow])
+
   if (!running) {
     return <StudyDone label="Написание завершено" onRestart={s.restart} />
   }
@@ -1068,6 +1126,7 @@ function Write({ set, id }) {
 
       <form className="write-form" onSubmit={(e) => { e.preventDefault(); submit() }}>
         <input
+          ref={inputRef}
           className="write-input"
           type="text"
           autoComplete="off"
@@ -1147,12 +1206,18 @@ function speakEnglish(text) {
 
 // K7 SPELL mode: hear the word, type it letter-by-letter. Reuses the adaptive
 // session machine so statuses follow the same correct-2x->mastered semantics.
-function Spell({ set, id }) {
-  const s = useStudySession(set, id)
+function Spell({ set, id, studyDirection, setStudyDirection }) {
+  const s = useStudySession(set, id, studyDirection, setStudyDirection)
   const { card, masteredCount, n, running } = s
   const [input, setInput] = useState('')
+  const inputRef = useRef(null)
   const [phase, setPhase] = useState('question')
   const [result, setResult] = useState(null)
+
+  // K27: autofocus input when transitioning to question phase.
+  useEffect(() => {
+    if (phase === 'question' && inputRef.current) inputRef.current.focus()
+  }, [phase])
 
   const word = card ? card.word : ''
   const hint = card ? card.word.charAt(0) : ''
@@ -1186,6 +1251,18 @@ function Spell({ set, id }) {
     }
   }
 
+  // K27: register advance handler for Enter key in feedback phase.
+  useEffect(() => {
+    advanceRegistry.handler = phase === 'feedback' ? next : null
+    return () => { if (advanceRegistry.handler === next) advanceRegistry.handler = null }
+  }, [phase, next])
+
+  // K27: register shuffle handler for settings-panel shuffle button.
+  useEffect(() => {
+    studyRegistry.shuffleNow = running ? s.shuffleNow : null
+    return () => { if (studyRegistry.shuffleNow === s.shuffleNow) studyRegistry.shuffleNow = null }
+  }, [running, s.shuffleNow])
+
   if (!running) {
     return <StudyDone label="Spell завершён" onRestart={s.restart} />
   }
@@ -1210,6 +1287,7 @@ function Spell({ set, id }) {
 
       <form className="write-form" onSubmit={(e) => { e.preventDefault(); submit() }}>
         <input
+          ref={inputRef}
           className="write-input"
           type="text"
           autoComplete="off"
@@ -1597,18 +1675,11 @@ function Blast({ set, id }) {
     }
   }
 
-  // K26: the single progression step (replaces next()). Reads live state from
-  // the blastState ref so the delayed correct-answer timer always advances with
-  // the freshest level/pool/poolPos, and never double-advances out of 'playing'.
-  const advance = () => {
-    clearBlastFlash()
-    const { pool, poolPos, level, phase } = blastState.current
-    if (phase !== 'playing') return
-    const pos = poolPos + 1
-    setPoolPos(pos)
-    setFeedback(null)
-    launch(pool, pos, level)
-  }
+  // K27: register advance handler for Enter key in feedback phase (wrong answers).
+  useEffect(() => {
+    advanceRegistry.handler = (feedback === 'wrong') ? advance : null
+    return () => { if (advanceRegistry.handler === advance) advanceRegistry.handler = null }
+  }, [feedback, advance])
 
   // K23 (2): digits 1..N click the visible Blast blocks (DOM order).
   useEffect(() => {
@@ -1808,6 +1879,9 @@ export default function SetPage() {
   const [starVer, setStarVer] = useState(0)
   // K23 (5): collapsible top-right settings menu (non-vertical shift of game area).
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // K27: direction state owned by SetPage so the settings panel can bind to it.
+  const [studyDirection, setStudyDirection] = useState('en-ru')
+  // K27: study registry for cross-mode shuffle.
 
   // K23 (1): when entering fullscreen in ANY mode we drive the presentation with
   // CSS classes on `document.body` + the page root (see styles.css .fs-active),
@@ -2063,6 +2137,14 @@ export default function SetPage() {
       if (e.metaKey || e.ctrlKey || e.altKey) return
 
       const k = e.key
+
+      // K27: Enter for Далее in all study modes — fires outside text fields
+      // when a study mode has registered an advance handler (feedback phase).
+      if (e.key === 'Enter' && !inField && advanceRegistry.handler) {
+        e.preventDefault()
+        advanceRegistry.handler()
+        return
+      }
 
       // 'F' toggles fullscreen in every mode.
       if (k === 'f' || k === 'F' || k === 'а') {
@@ -2373,6 +2455,33 @@ export default function SetPage() {
             ⛶ Полный экран
           </button>
           <div className="settings-panel-group" data-testid="settings-cards-controls">
+            {/* K27: direction toggle visible in learn/write modes */}
+            {(mode === 'learn' || mode === 'write') && (
+              <div className="settings-panel-row btns">
+                <div className="quiz-direction" role="tablist" aria-label="Направление">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={studyDirection === 'en-ru'}
+                    className={'quiz-dir-btn' + (studyDirection === 'en-ru' ? ' active' : '')}
+                    onClick={() => setStudyDirection('en-ru')}
+                    data-testid="settings-dir-en-ru"
+                  >
+                    en-ru
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={studyDirection === 'ru-en'}
+                    className={'quiz-dir-btn' + (studyDirection === 'ru-en' ? ' active' : '')}
+                    onClick={() => setStudyDirection('ru-en')}
+                    data-testid="settings-dir-ru-en"
+                  >
+                    ru-en
+                  </button>
+                </div>
+              </div>
+            )}
             <label className="settings-panel-row">
               <input type="checkbox" checked={priority} onChange={togglePriority} data-testid="settings-priority" />
               <span>Приоритет повторения</span>
@@ -2422,15 +2531,15 @@ export default function SetPage() {
       ) : mode === 'test' ? (
         <ExtendedTest set={set} id={id} />
       ) : mode === 'spell' ? (
-        <Spell set={set} id={id} />
+        <Spell set={set} id={id} studyDirection={studyDirection} setStudyDirection={setStudyDirection} />
       ) : mode === 'match' ? (
         <Match set={set} id={id} />
       ) : mode === 'blast' ? (
         <Blast set={set} id={id} />
       ) : mode === 'learn' ? (
-        <Learn set={set} id={id} />
+        <Learn set={set} id={id} studyDirection={studyDirection} setStudyDirection={setStudyDirection} />
       ) : mode === 'write' ? (
-        <Write set={set} id={id} />
+        <Write set={set} id={id} studyDirection={studyDirection} setStudyDirection={setStudyDirection} />
       ) : cardsDue === 0 ? (
         <NoReviews onRestart={restart} />
       ) : order.length === 0 ? (

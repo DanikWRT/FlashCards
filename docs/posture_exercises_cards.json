@@ -1,0 +1,284 @@
+{
+  "topic": "Позы и упражнения / Posture & exercises",
+  "lesson_meta": { "unit": 1 },
+  "cards": [
+    {
+      "word": "Stand",
+      "translation": "стоять",
+      "examples": [
+        { "en": "Please stand up from your chair.", "ru": "Пожалуйста, встаньте со стула." },
+        { "en": "Stand here for a minute.", "ru": "Постой здесь минуту." }
+      ],
+      "phrases": [
+        { "en": "stand up", "ru": "вставать" },
+        { "en": "stand still", "ru": "стоять неподвижно" }
+      ],
+      "family": ["stands", "standing", "stood"]
+    },
+    {
+      "word": "Sit",
+      "translation": "сидеть",
+      "examples": [
+        { "en": "Sit on the mat.", "ru": "Садись на коврик." },
+        { "en": "She sits by the window.", "ru": "Она сидит у окна." }
+      ],
+      "phrases": [
+        { "en": "sit still", "ru": "сидеть спокойно" },
+        { "en": "sit comfortably", "ru": "сидеть удобно" }
+      ],
+      "family": ["sits", "sitting", "sat"]
+    },
+    {
+      "word": "Sit down",
+      "translation": "садиться",
+      "examples": [
+        { "en": "Please sit down and relax.", "ru": "Пожалуйста, садись и расслабься." },
+        { "en": "He sat down on the bench.", "ru": "Он сел на скамейку." }
+      ],
+      "phrases": [
+        { "en": "sit down and rest", "ru": "сесть и отдохнуть" }
+      ],
+      "family": ["sat down", "sitting down"]
+    },
+    {
+      "word": "Slouch",
+      "translation": "сутулиться",
+      "examples": [
+        { "en": "Don't slouch when you sit at the desk.", "ru": "Не сутулься, когда сидишь за столом." },
+        { "en": "He slouched in his chair.", "ru": "Он развалился в кресле." }
+      ],
+      "family": ["slouches", "slouching", "slouched"]
+    },
+    {
+      "word": "Sit up straight",
+      "translation": "сидеть прямо (выпрямившись)",
+      "examples": [
+        { "en": "Sit up straight and keep your back tall.", "ru": "Сядь прямо и держи спину ровно." },
+        { "en": "Good posture means sitting up straight.", "ru": "Правильная осанка означает сидеть прямо." }
+      ],
+      "phrases": [
+        { "en": "keep your back straight", "ru": "держи спину ровно" }
+      ]
+    },
+    {
+      "word": "Sit back",
+      "translation": "откинуться назад (сидя)",
+      "examples": [
+        { "en": "Sit back and take a deep breath.", "ru": "Откинься назад и сделай глубокий вдох." },
+        { "en": "He sat back in the armchair.", "ru": "Он откинулся в кресле." }
+      ],
+      "family": ["sat back", "sitting back"]
+    },
+    {
+      "word": "Lean forward",
+      "translation": "наклоняться вперёд",
+      "examples": [
+        { "en": "Lean forward and touch your toes.", "ru": "Наклонись вперёд и коснись пальцев ног." },
+        { "en": "Don't lean forward too much.", "ru": "Не наклоняйся слишком сильно вперёд." }
+      ],
+      "family": ["leant forward", "leaning forward"]
+    },
+    {
+      "word": "Recline",
+      "translation": "откидываться, полулежать",
+      "examples": [
+        { "en": "Recline the seat to rest.", "ru": "Откинь сиденье, чтобы отдохнуть." },
+        { "en": "She reclined on the sofa.", "ru": "Она полулежала на диване." }
+      ],
+      "family": ["reclines", "reclining", "reclined"]
+    },
+    {
+      "word": "Crouch",
+      "translation": "приседать, пригибаться",
+      "examples": [
+        { "en": "Crouch down to pick up the ball.", "ru": "Присядь, чтобы поднять мяч." },
+        { "en": "He crouched behind the wall.", "ru": "Он пригнулся за стеной." }
+      ],
+      "family": ["crouches", "crouching", "crouched"]
+    },
+    {
+      "word": "Kneel",
+      "translation": "стоять на коленях, становиться на колени",
+      "examples": [
+        { "en": "Kneel on the mat for the exercise.", "ru": "Встань на колени на коврике для упражнения." },
+        { "en": "She knelt down to tie her shoes.", "ru": "Она опустилась на колени, чтобы завязать шнурки." }
+      ],
+      "family": ["kneels", "kneeling", "knelt"]
+    },
+    {
+      "word": "Squat",
+      "translation": "приседать, приседание",
+      "examples": [
+        { "en": "Do ten squats every morning.", "ru": "Делай десять приседаний каждое утро." },
+        { "en": "He squatted down to pick up the box.", "ru": "Он присел, чтобы поднять коробку." }
+      ],
+      "family": ["squats", "squatting", "squatted"]
+    },
+    {
+      "word": "Bend over",
+      "translation": "нагибаться, наклоняться",
+      "examples": [
+        { "en": "Bend over and stretch your back.", "ru": "Наклонись и потяни спину." },
+        { "en": "He bent over to pick up the paper.", "ru": "Он нагнулся, чтобы поднять бумагу." }
+      ],
+      "family": ["bent over", "bending over"]
+    },
+    {
+      "word": "Stoop down",
+      "translation": "наклоняться, сгибаться",
+      "examples": [
+        { "en": "Stoop down to enter the low doorway.", "ru": "Наклонись, чтобы войти в низкую дверь." },
+        { "en": "She stooped down to pick the flower.", "ru": "Она нагнулась, чтобы сорвать цветок." }
+      ],
+      "family": ["stooped down", "stooping down"]
+    },
+    {
+      "word": "On all fours",
+      "translation": "на четвереньках",
+      "examples": [
+        { "en": "Crawl on all fours across the room.", "ru": "Проползи на четвереньках через комнату." },
+        { "en": "The baby moved on all fours.", "ru": "Малыш передвигался на четвереньках." }
+      ]
+    },
+    {
+      "word": "On your hands and knees",
+      "translation": "на руках и коленях (на четвереньках)",
+      "examples": [
+        { "en": "Get on your hands and knees for this pose.", "ru": "Встань на руки и колени для этой позы." },
+        { "en": "She scrubbed the floor on her hands and knees.", "ru": "Она мыла пол, стоя на руках и коленях." }
+      ]
+    },
+    {
+      "word": "Cross-legged",
+      "translation": "скрестив ноги, по-турецки",
+      "examples": [
+        { "en": "Sit cross-legged on the floor.", "ru": "Сядь скрестив ноги на пол." },
+        { "en": "She meditated cross-legged.", "ru": "Она медитировала, сидя со скрещенными ногами." }
+      ],
+      "phrases": [
+        { "en": "sit cross-legged", "ru": "сидеть по-турецки" }
+      ]
+    },
+    {
+      "word": "Lean on",
+      "translation": "опираться на",
+      "examples": [
+        { "en": "Lean on the wall for support.", "ru": "Обопрись о стену для опоры." },
+        { "en": "He leaned on the railing.", "ru": "Он опирался на перила." }
+      ],
+      "family": ["leant on", "leaning on"]
+    },
+    {
+      "word": "Lean over",
+      "translation": "перегибаться, наклоняться над",
+      "examples": [
+        { "en": "Lean over the table to reach the book.", "ru": "Перегнись через стол, чтобы достать книгу." },
+        { "en": "She leaned over the railing to look down.", "ru": "Она перегнулась через перила, чтобы посмотреть вниз." }
+      ],
+      "family": ["leant over", "leaning over"]
+    },
+    {
+      "word": "Bow",
+      "translation": "кланяться, поклон",
+      "examples": [
+        { "en": "Bow to the audience at the end.", "ru": "Поклонись публике в конце." },
+        { "en": "He gave a polite bow.", "ru": "Он вежливо поклонился." }
+      ],
+      "family": ["bows", "bowing", "bowed"]
+    },
+    {
+      "word": "Curtsy",
+      "translation": "делать реверанс",
+      "examples": [
+        { "en": "The girl curtsied to the queen.", "ru": "Девочка сделала реверанс королеве." },
+        { "en": "She gave a little curtsy.", "ru": "Она сделала лёгкий реверанс." }
+      ],
+      "family": ["curtsies", "curtsying", "curtsied"]
+    },
+    {
+      "word": "Lie",
+      "translation": "лежать",
+      "examples": [
+        { "en": "Lie on your back for this exercise.", "ru": "Ляг на спину для этого упражнения." },
+        { "en": "He lies on the grass in the park.", "ru": "Он лежит на траве в парке." }
+      ],
+      "phrases": [
+        { "en": "lie on your back", "ru": "лежать на спине" },
+        { "en": "lie on your side", "ru": "лежать на боку" }
+      ],
+      "family": ["lies", "lying", "lay", "lain"]
+    },
+    {
+      "word": "Lie down",
+      "translation": "ложиться",
+      "examples": [
+        { "en": "Lie down on the mat and relax.", "ru": "Ляг на коврик и расслабься." },
+        { "en": "I need to lie down for a while.", "ru": "Мне нужно прилечь ненадолго." }
+      ],
+      "family": ["lay down", "lying down"]
+    },
+    {
+      "word": "Stand with your hands in your pockets",
+      "translation": "стоять с руками в карманах",
+      "examples": [
+        { "en": "Stand with your hands in your pockets for the photo.", "ru": "Встань с руками в карманах для фото." },
+        { "en": "He stood with his hands in his pockets.", "ru": "Он стоял с руками в карманах." }
+      ]
+    },
+    {
+      "word": "Stand with your arms folded",
+      "translation": "стоять со скрещёнными руками",
+      "examples": [
+        { "en": "Stand with your arms folded and look confident.", "ru": "Стой со скрещёнными руками и выгляди уверенно." },
+        { "en": "She stood with her arms folded.", "ru": "Она стояла со скрещёнными руками." }
+      ]
+    },
+    {
+      "word": "Stand with your arms crossed",
+      "translation": "стоять со скрещёнными на груди руками",
+      "examples": [
+        { "en": "Stand with your arms crossed during the warm-up.", "ru": "Встань со скрещёнными на груди руками на разминке." },
+        { "en": "He stood with his arms crossed.", "ru": "Он стоял со скрещёнными на груди руками." }
+      ]
+    },
+    {
+      "word": "Stand with your hands on your hips",
+      "translation": "стоять, подбоченившись (руки на бёдрах)",
+      "examples": [
+        { "en": "Stand with your hands on your hips and breathe deeply.", "ru": "Встань, положив руки на бёдра, и дыши глубоко." },
+        { "en": "She stood with her hands on her hips.", "ru": "Она стояла, подбоченившись." }
+      ]
+    },
+    {
+      "word": "Stand with your hands behind your back",
+      "translation": "стоять с руками за спиной",
+      "examples": [
+        { "en": "Stand with your hands behind your back and straighten up.", "ru": "Встань с руками за спиной и выпрямись." },
+        { "en": "He stood with his hands behind his back.", "ru": "Он стоял с руками за спиной." }
+      ]
+    },
+    {
+      "word": "Handstand",
+      "translation": "стойка на руках",
+      "examples": [
+        { "en": "Can you do a handstand?", "ru": "Ты умеешь делать стойку на руках?" },
+        { "en": "He held a handstand for ten seconds.", "ru": "Он простоял в стойке на руках десять секунд." }
+      ],
+      "phrases": [
+        { "en": "do a handstand", "ru": "делать стойку на руках" },
+        { "en": "hold a handstand", "ru": "держать стойку на руках" }
+      ]
+    },
+    {
+      "word": "Headstand",
+      "translation": "стойка на голове",
+      "examples": [
+        { "en": "Practise a headstand with a spotter nearby.", "ru": "Практикуй стойку на голове с тем, кто находится рядом." },
+        { "en": "She mastered the yoga headstand.", "ru": "Она освоила йоговскую стойку на голове." }
+      ],
+      "phrases": [
+        { "en": "do a headstand", "ru": "делать стойку на голове" }
+      ]
+    }
+  ]
+}

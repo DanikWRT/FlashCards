@@ -1,0 +1,24 @@
+{
+  "runId": "20261003-000731-6dvqes",
+  "pipelineName": "dev-sprint-headless",
+  "description": "Headless TDD dev cycle: plan → tests → implement (review-gates) → verify → next steps. No interactive interview; safe for kanban/headless runs.",
+  "task": "Implement K27 UX cleanup per pi_k27_prompt.md: move StudyDirection+shuffle from Learn field into settings panel, Enter for Далее in all modes, two-column matching EN|RU, autofocus on new question.",
+  "startedAt": "2026-10-02T20:07:31.158Z",
+  "status": "failed",
+  "stages": [
+    {
+      "stageId": "plan",
+      "index": 0,
+      "type": "simple",
+      "agent": "planner",
+      "model": "",
+      "resolvedTask": "Analyze the codebase and create a detailed implementation plan for: Implement K27 UX cleanup per pi_k27_prompt.md: move StudyDirection+shuffle from Learn field into settings panel, Enter for Далее in all modes, two-column matching EN|RU, autofocus on new question.. Include acceptance criteria, test strategy, architecture decisions, likely files to change, dependencies, risks, and a verification plan. If the task is ambiguous or important context is missing, state that explicitly and proceed with reasonable assumptions rather than asking the user.\n",
+      "success": false,
+      "durationMs": 3,
+      "error": "Stage \"plan\" failed: Agent \"planner\" failed: Public workflowScript execution does not support clarify UI."
+    }
+  ],
+  "success": false,
+  "totalDurationMs": 8,
+  "synthesis": "Run fan-out: 1/64 used, 63 remaining\nAsync: planner [555e5697-ddc4-4324-8051-d45ece17b0bd]\n\nThe async run is detached. Do not run sleep timers or polling loops just to wait for it.\nThis is a non-interactive run: Pi auto-drains current-session subagent work at agent_end so detached children are not abandoned. Use bg_wait only when this turn must receive provider, detached, or other background-work results that have no native completion notification.\nUse subagent({ action: \"status\", id: \"...\" }) when you need a one-shot status/result or to inspect a blocked/stale run; do not poll in a loop.\nMission: fbbcf2d2-3adc-4337-9f07-fb2a62bfb0c8 (active)"
+}

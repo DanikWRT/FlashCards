@@ -1,0 +1,224 @@
+{
+  "topic": "Parts of the body / Части тела",
+  "lesson_meta": { "unit": 1 },
+  "cards": [
+    {
+      "word": "skull",
+      "translation": "череп",
+      "examples": [
+        { "en": "The skull protects the brain.", "ru": "Череп защищает мозг." }
+      ],
+      "phrases": "skull fracture - перелом черепа",
+      "family": "skullcap - черепная коробка"
+    },
+    {
+      "word": "forehead",
+      "translation": "лоб",
+      "examples": [
+        { "en": "She wiped the sweat from her forehead.", "ru": "Она вытерла пот со лба." }
+      ],
+      "phrases": "high forehead - высокий лоб",
+      "family": "fore - передний, head - голова"
+    },
+    {
+      "word": "lip",
+      "translation": "губа",
+      "examples": [
+        { "en": "He bit his lip nervously.", "ru": "Он нервно прикусил губу." }
+      ],
+      "phrases": "lipstick - губная помада",
+      "family": "liplike - похожий на губу"
+    },
+    {
+      "word": "chin",
+      "translation": "подбородок",
+      "examples": [
+        { "en": "She rested her chin on her hands.", "ru": "Она опёрлась подбородком на руки." }
+      ],
+      "phrases": "double chin - двойной подбородок",
+      "family": "chine - подбородок (устар.)"
+    },
+    {
+      "word": "jaw",
+      "translation": "челюсть",
+      "examples": [
+        { "en": "He clenched his jaw in anger.", "ru": "Он сжал челюсть от злости." }
+      ],
+      "phrases": "jawbone - челюстная кость",
+      "family": "jawed - с челюстью (какой-л.)"
+    },
+    {
+      "word": "cheek",
+      "translation": "щека",
+      "examples": [
+        { "en": "Her cheeks turned red.", "ru": "Её щёки покраснели." }
+      ],
+      "phrases": "cheekbone - скула",
+      "family": "cheeky - нахальный (перен.)"
+    },
+    {
+      "word": "eyebrow",
+      "translation": "бровь",
+      "examples": [
+        { "en": "He raised an eyebrow in surprise.", "ru": "Он удивлённо поднял бровь." }
+      ],
+      "phrases": "raised eyebrows - поднятые брови",
+      "family": "eye - глаз, brow - бровь"
+    },
+    {
+      "word": "eyelid",
+      "translation": "веко",
+      "examples": [
+        { "en": "Her eyelids were heavy with sleep.", "ru": "Её веки тяжелели от сна." }
+      ],
+      "phrases": "upper eyelid - верхнее веко",
+      "family": "eye - глаз, lid - крышка"
+    },
+    {
+      "word": "skin",
+      "translation": "кожа",
+      "examples": [
+        { "en": "Her skin is soft and smooth.", "ru": "У неё мягкая и гладкая кожа." }
+      ],
+      "phrases": "skin tone - тон кожи; sensitive skin - чувствительная кожа",
+      "family": "skinny - худой, skinless - без кожи"
+    },
+    {
+      "word": "wrist",
+      "translation": "запястье",
+      "examples": [
+        { "en": "He wore a watch on his wrist.", "ru": "Он носил часы на запястье." }
+      ],
+      "phrases": "wristwatch - наручные часы",
+      "family": "wristband - браслет, повязка"
+    },
+    {
+      "word": "thumb",
+      "translation": "большой палец (руки)",
+      "examples": [
+        { "en": "She hit her thumb with the hammer.", "ru": "Она ударила молотком по большому пальцу." }
+      ],
+      "phrases": "thumb up - большой палец вверх; thumbs down - жест несогласия",
+      "family": "thumbnail - ноготь большого пальца"
+    },
+    {
+      "word": "waist",
+      "translation": "талия",
+      "examples": [
+        { "en": "She tied the belt around her waist.", "ru": "Она завязала пояс на талии." }
+      ],
+      "phrases": "waistline - линия талии",
+      "family": "waisted - с талией (какой-л.)"
+    },
+    {
+      "word": "hip",
+      "translation": "бедро, таз",
+      "examples": [
+        { "en": "He put his hands on his hips.", "ru": "Он упёрся руками в бёдра." }
+      ],
+      "phrases": "hip bone - тазовая кость",
+      "family": "hipline - линия бёдер"
+    },
+    {
+      "word": "thigh",
+      "translation": "бедро (верхняя часть ноги)",
+      "examples": [
+        { "en": "He stretched his thigh muscles.", "ru": "Он растянул мышцы бедра." }
+      ],
+      "phrases": "thigh bone - бедренная кость",
+      "family": "thigh-length - до бедра (по длине)"
+    },
+    {
+      "word": "knee",
+      "translation": "колено",
+      "examples": [
+        { "en": "She hurt her knee while running.", "ru": "Она поранила колено во время бега." }
+      ],
+      "phrases": "knee cap - коленная чашечка; go down on one's knees - встать на колени",
+      "family": "kneecap - коленная чашечка"
+    },
+    {
+      "word": "shoulder",
+      "translation": "плечо",
+      "examples": [
+        { "en": "He shrugged his shoulders.", "ru": "Он пожал плечами." }
+      ],
+      "phrases": "shoulder to shoulder - плечом к плечу",
+      "family": "shoulder blade - лопатка"
+    },
+    {
+      "word": "elbow",
+      "translation": "локоть",
+      "examples": [
+        { "en": "She leaned on her elbows.", "ru": "Она оперлась на локти." }
+      ],
+      "phrases": "elbow room - пространство для манёвра",
+      "family": "elbow joint - локтевой сустав"
+    },
+    {
+      "word": "nail",
+      "translation": "ноготь; гвоздь",
+      "examples": [
+        { "en": "She painted her nails red.", "ru": "Она накрасила ногти красным." },
+        { "en": "He hammered a nail into the wall.", "ru": "Он вбил гвоздь в стену." }
+      ],
+      "phrases": "finger nail - ноготь на пальце руки; nail polish - лак для ногтей",
+      "family": "toenail - ноготь на пальце ноги"
+    },
+    {
+      "word": "bottom",
+      "translation": "низ, дно; ягодицы",
+      "examples": [
+        { "en": "The child sat on the bottom step.", "ru": "Ребёнок сидел на нижней ступеньке." }
+      ],
+      "phrases": "at the bottom - внизу, на дне",
+      "family": "bottomless - бездонный"
+    },
+    {
+      "word": "shin",
+      "translation": "голень",
+      "examples": [
+        { "en": "He kicked the ball with his shin.", "ru": "Он ударил по мячу голенью." }
+      ],
+      "phrases": "shin bone - большеберцовая кость",
+      "family": "shinhone - голевая кость"
+    },
+    {
+      "word": "toe",
+      "translation": "палец (ноги)",
+      "examples": [
+        { "en": "She stubbed her toe on the chair.", "ru": "Она ушибла палец ноги о стул." }
+      ],
+      "phrases": "big toe - большой палец ноги; stand on tiptoe - стоять на цыпочках",
+      "family": "toenail - ноготь на пальце ноги"
+    },
+    {
+      "word": "calf",
+      "translation": "икра (ноги)",
+      "examples": [
+        { "en": "His calf muscles were sore after the run.", "ru": "После пробежки у него болели икроножные мышцы." }
+      ],
+      "phrases": "calf muscle - икроножная мышца; calf strain - растяжение икры",
+      "family": "calfbone - малоберцовая кость"
+    },
+    {
+      "word": "ankle",
+      "translation": "лодыжка, щиколотка",
+      "examples": [
+        { "en": "She twisted her ankle on the stairs.", "ru": "Она подвернула лодыжку на лестнице." }
+      ],
+      "phrases": "ankle joint - голеностопный сустав; ankle socks - короткие носки",
+      "family": "anklet - браслет на щиколотку"
+    },
+    {
+      "word": "heel",
+      "translation": "пятка; каблук",
+      "examples": [
+        { "en": "The stone hurt his heel.", "ru": "Камень поранил ему пятку." },
+        { "en": "She wore high heels.", "ru": "Она носила туфли на высоких каблуках." }
+      ],
+      "phrases": "Achilles' heel - ахиллесова пята; high heels - высокие каблуки",
+      "family": "heelbone - пяточная кость"
+    }
+  ]
+}
