@@ -7,7 +7,9 @@ import {
   loadClasses, saveClasses, addClass, removeClass, renameClass,
   classSetMember, classSetUnmember, buildLeaderboard,
   syncSetsFromServer, deleteSetShared,
+  bookmarkSetShared, unbookmarkSetShared, loadMySetIds,
 } from '../store.js'
+import { useAuth } from '../auth.jsx'
 
 // Share of a set's cards currently mastered, as a percentage (rounded).
 function masteryOf(set) {
@@ -35,10 +37,14 @@ function fmtMs(ms) {
 }
 
 export default function MySets() {
+  const { username, isLoggedIn } = useAuth()
   const [sets, setSets] = useState(loadSets)
   const [folders, setFolders] = useState(loadFolders)
   const [classes, setClasses] = useState(loadClasses)
   const [leaderboard, setLeaderboard] = useState(buildLeaderboard)
+  // K18: home page tabs ('mine' = user's own+bookmarked sets, 'all' = everything).
+  const [tab, setTab] = useState('all')
+  const [mySetIds, setMySetIds] = useState([])
 
   // Folder UI state.
   const [newFolder, setNewFolder] = useState('')
@@ -64,8 +70,20 @@ export default function MySets() {
     return () => { cancelled = true }
   }, [])
 
+  // K18: load the ids the current user owns+bookmarked whenever login changes.
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setMySetIds([])
+      return
+    }
+    let cancelled = false
+    loadMySetIds().then((ids) => { if (!cancelled) setMySetIds(ids) })
+    return () => { cancelled = true }
+  }, [isLoggedIn])
+
   const refresh = () => {
     setSets(loadSets())
+    if (isLoggedIn) loadMySetIds().then(setMySetIds)
     setFolders(loadFolders())
     setClasses(loadClasses())
     setLeaderboard(buildLeaderboard())
@@ -126,23 +144,50 @@ export default function MySets() {
   const streak = getDayStreak()
 
   // Sets visible under the current folder filter.
-  const filteredSets = filterFolder === 'all'
+  const folderFiltered = filterFolder === 'all'
     ? sets
     : sets.filter((s) => {
         const folder = folders.find((f) => f.id === filterFolder)
         return folder ? folder.setIds.includes(s.id) : false
       })
+  // K18: the set ids the current user owns + bookmarked (from the server).
+  const myIds = new Set(mySetIds)
+
+  // K18: tab selection ('mine' = user's own+bookmarked sets, 'all' = everything).
+  const displaySets = tab === 'mine'
+    ? folderFiltered.filter((s) => myIds.has(s.id))
+    : folderFiltered
+
+  const handleBookmark = (id) => bookmarkSetShared(id).then(refresh)
+  const handleUnbookmark = (id) => unbookmarkSetShared(id).then(refresh)
 
   const setCard = (set) => {
     const pct = masteryOf(set)
+    const isMine = myIds.has(set.id)
+    const author = set.author ? set.author : '—'
     return (
       <div className="set-card" key={set.id}>
-        <Link to={`/set/${set.id}`} className="set-card-main">
-          <h3 className="set-title">{set.topic || 'Без названия'}</h3>
-          <span className="set-count">{set.cards.length} карточек</span>
-          <span className="set-memory">Память: {pct}%</span>
-        </Link>
-        <button className="btn-icon" title="Удалить" onClick={() => handleDelete(set.id)}>✕</button>
+        <div className="set-card-actions-top">
+          <Link to={`/set/${set.id}`} className="set-card-main">
+            <h3 className="set-title">{set.topic || 'Без названия'}</h3>
+            <span className="set-count">{set.cards.length} карточек</span>
+            <span className="set-memory">Память: {pct}%</span>
+            <span className="set-author">Автор: {author}</span>
+          </Link>
+          <button className="btn-icon" title="Удалить" onClick={() => handleDelete(set.id)}>✕</button>
+        </div>
+        <div className="set-card-actions">
+          {isLoggedIn && (isMine ? (
+            <button type="button" className="btn btn-outline" onClick={() => handleUnbookmark(set.id)}>
+              Убрать
+            </button>
+          ) : (
+            <button type="button" className="btn btn-outline" onClick={() => handleBookmark(set.id)}>
+              Добавить к себе
+            </button>
+          ))}
+          <Link className="btn btn-primary" to={`/set/${set.id}`}>Посмотреть</Link>
+        </div>
       </div>
     )
   }
@@ -385,23 +430,52 @@ export default function MySets() {
         )}
       </section>
 
-      {/* ---------- Set grid (grouped/filtered by folder) ---------- */}
+      {/* ---------- K18 tabs: "Мои наборы" vs "Общие наборы" ---------- */}
+      <div className="k18-tabs" role="tablist">
+        <button
+          type="button"
+          className={'k18-tab' + (tab === 'all' ? ' active' : '')}
+          role="tab"
+          aria-selected={tab === 'all'}
+          onClick={() => setTab('all')}
+        >
+          Общие наборы
+        </button>
+        <button
+          type="button"
+          className={'k18-tab' + (tab === 'mine' ? ' active' : '')}
+          role="tab"
+          aria-selected={tab === 'mine'}
+          onClick={() => setTab('mine')}
+        >
+          Мои наборы
+        </button>
+      </div>
+
       {filterFolder !== 'all' && (
         <p className="k11-filter-hint">
           Показаны наборы из папки «{folders.find((f) => f.id === filterFolder)?.name || ''}».
         </p>
       )}
 
-      {filteredSets.length === 0 ? (
+      {tab === 'mine' && !isLoggedIn ? (
         <div className="empty">
-          <p>Нет наборов {filterFolder !== 'all' ? 'в этой папке' : ''}.</p>
-          {filterFolder === 'all' && (
+          <p>Войдите, чтобы увидеть свои наборы.</p>
+        </div>
+      ) : displaySets.length === 0 ? (
+        <div className="empty">
+          <p>
+            {tab === 'mine'
+              ? 'У вас пока нет своих наборов. Нажмите «Добавить к себе» на общем наборе.'
+              : 'Нет наборов' + (filterFolder !== 'all' ? ' в этой папке' : '') + '.'}
+          </p>
+          {filterFolder === 'all' && tab === 'all' && (
             <Link className="btn btn-primary" to="/sets/new">Импортировать первый набор</Link>
           )}
         </div>
       ) : (
         <div className="set-grid" data-testid="set-grid">
-          {filteredSets.map(setCard)}
+          {displaySets.map(setCard)}
         </div>
       )}
     </div>

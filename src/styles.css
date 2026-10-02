@@ -306,8 +306,8 @@ h1 {
 .set-card {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -318,6 +318,32 @@ h1 {
 .set-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+}
+
+/* K18: top row = main link + delete button, bottom row = bookmark/view. */
+.set-card-actions-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 10px;
+}
+
+.set-card-actions-top .btn-icon {
+  margin-top: 14px;
+}
+
+.set-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 0 14px 14px;
+}
+
+.set-card-actions .btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
 }
 
 .set-card-main {
@@ -334,6 +360,15 @@ h1 {
   color: var(--muted);
   font-size: 14px;
   font-weight: 500;
+}
+
+/* K18: the set's author line on the card. */
+.set-author {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .set-count.big {
@@ -2353,3 +2388,36 @@ h1 {
 .fs-controls { display: flex; gap: 16px; }
 .fs-controls .btn { font-size: 22px; padding: 10px 24px; }
 .fs-controls .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- K18 My sets vs Common sets tabs ---------- */
+.k18-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  margin: 0 0 18px;
+  box-shadow: var(--shadow);
+}
+
+.k18-tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.k18-tab:hover {
+  color: var(--text);
+}
+
+.k18-tab.active {
+  background: var(--primary);
+  color: #fff;
+}

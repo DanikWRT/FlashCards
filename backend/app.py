@@ -86,7 +86,22 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS sets ("
             "id TEXT PRIMARY KEY, "
             "json TEXT, "
-            "created TEXT"
+            "created TEXT, "
+            "author TEXT"
+            ")"
+        )
+        # K18: backward-compatible migration for DBs created before the author
+        # column existed. Old rows keep author NULL.
+        try:
+            conn.execute("ALTER TABLE sets ADD COLUMN author TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS fc_my_sets ("
+            "username TEXT, "
+            "set_id TEXT, "
+            "added TEXT, "
+            "PRIMARY KEY (username, set_id)"
             ")"
         )
         conn.execute(
@@ -213,13 +228,16 @@ class Handler(BaseHTTPRequestHandler):
         self._send_bytes(404, b"Not found", "text/plain")
 
     @staticmethod
-    def _clean(obj, sid):
-        """Shape a stored/request set into {id, topic, lesson_meta, cards}."""
+    def _clean(obj, sid, author=None):
+        """Shape a stored/request set into {id, topic, lesson_meta, cards, author}."""
+        if author is None and isinstance(obj, dict):
+            author = obj.get("author")
         return {
             "id": sid,
             "topic": obj.get("topic", "") if isinstance(obj, dict) else "",
             "lesson_meta": obj.get("lesson_meta", {}) if isinstance(obj, dict) else {},
             "cards": obj.get("cards", []) if isinstance(obj, dict) else [],
+            "author": author,
         }
 
     # ---------------- auth helpers ----------------
@@ -284,6 +302,21 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send_json(200, {"username": username})
             return
+        if path == "/api/my/sets":
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            conn = get_conn()
+            try:
+                rows = conn.execute(
+                    "SELECT set_id FROM fc_my_sets WHERE username=?", (username,)
+                ).fetchall()
+            finally:
+                conn.close()
+            ids = [r["set_id"] for r in rows]
+            self._send_json(200, {"ids": ids})
+            return
         if path == "/api/sets":
             conn = get_conn()
             try:
@@ -293,7 +326,8 @@ class Handler(BaseHTTPRequestHandler):
             sets = []
             for r in rows:
                 try:
-                    sets.append(json.loads(r["json"]))
+                    obj = json.loads(r["json"])
+                    sets.append(self._clean(obj, obj.get("id") or ""))
                 except (ValueError, TypeError):
                     continue
             self._send_json(200, sets)
@@ -369,6 +403,27 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
             self._send_json(200, {"ok": True})
             return
+        # K18: POST /api/sets/{id}/bookmark adds a set to the acting user's list.
+        if path.startswith("/api/sets/") and path.endswith("/bookmark"):
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            sid = unquote(path[len("/api/sets/"):-len("/bookmark")])
+            if self._api_json(sid) is None:
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
+            conn = get_conn()
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO fc_my_sets (username, set_id, added) VALUES (?, ?, ?)",
+                    (username, sid, _now()),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            self._send_json(200, {"ok": True})
+            return
         if path != "/api/sets":
             self._send_json(404, {"ok": False, "error": "not found"})
             return
@@ -377,13 +432,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "invalid JSON body"})
             return
         sid = uuid.uuid4().hex
-        obj = self._clean(body, sid)
+        author = self._acting_user() or "guest"
+        obj = self._clean(body, sid, author)
         conn = get_conn()
         try:
             conn.execute(
-                "INSERT INTO sets (id, json, created) VALUES (?, ?, ?)",
-                (sid, json.dumps(obj, ensure_ascii=False), _now()),
+                "INSERT INTO sets (id, json, created, author) VALUES (?, ?, ?, ?)",
+                (sid, json.dumps(obj, ensure_ascii=False), _now(), author),
             )
+            # The set's author automatically has it in their own list.
+            if author != "guest":
+                conn.execute(
+                    "INSERT OR IGNORE INTO fc_my_sets (username, set_id, added) VALUES (?, ?, ?)",
+                    (author, sid, _now()),
+                )
             conn.commit()
         finally:
             conn.close()
@@ -399,10 +461,12 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             self._send_json(400, {"ok": False, "error": "invalid JSON body"})
             return
-        if self._api_json(sid) is None:
+        existing = self._api_json(sid)
+        if existing is None:
             self._send_json(404, {"ok": False, "error": "not found"})
             return
-        obj = self._clean(body, sid)
+        # Preserve the existing author across updates.
+        obj = self._clean(body, sid, existing.get("author"))
         conn = get_conn()
         try:
             conn.execute(
@@ -416,6 +480,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         path = urlparse(self.path).path
+        # K18: DELETE /api/sets/{id}/bookmark removes a set from the user's list.
+        if path.startswith("/api/sets/") and path.endswith("/bookmark"):
+            username = self._acting_user()
+            if username is None:
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
+            sid = unquote(path[len("/api/sets/"):-len("/bookmark")])
+            conn = get_conn()
+            try:
+                conn.execute(
+                    "DELETE FROM fc_my_sets WHERE username=? AND set_id=?", (username, sid)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            self._send_json(200, {"ok": True})
+            return
         if not path.startswith("/api/sets/"):
             self._send_json(404, {"ok": False, "error": "not found"})
             return

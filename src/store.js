@@ -59,11 +59,13 @@ export function removeSet(id) {
 
 const API_BASE = '/api/sets'
 
+// K18: optionally attach the Bearer token (read from localStorage 'fc_token')
+// for authenticated calls. A token is attached whenever one is stored.
 async function http(url, options = {}) {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    ...options,
-  })
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+  const token = localStorage.getItem('fc_token')
+  if (token) headers['Authorization'] = 'Bearer ' + token
+  const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
   if (!res.ok) throw new Error('HTTP ' + res.status)
   return res.json()
 }
@@ -158,6 +160,53 @@ export async function deleteSetShared(id) {
     console.warn('Server unreachable, deleted set locally only', e)
   }
   removeSet(id)
+}
+
+// ---------- K18 my-sets (bookmark) ----------
+// Authenticated calls that let a user add shared sets to their own list
+// (fc_my_sets on the server). All use the Bearer token via http().
+
+export async function apiBookmarkSet(id) {
+  return http(API_BASE + '/' + encodeURIComponent(id) + '/bookmark', { method: 'POST' })
+}
+
+export async function apiUnbookmarkSet(id) {
+  return http(API_BASE + '/' + encodeURIComponent(id) + '/bookmark', { method: 'DELETE' })
+}
+
+export async function apiMySets() {
+  return http('/api/my/sets')
+}
+
+// Add a shared set to the current user's own list; graceful fallback.
+export async function bookmarkSetShared(id) {
+  try {
+    return await apiBookmarkSet(id)
+  } catch (e) {
+    console.warn('Bookmark failed (not authenticated?)', e)
+    return { ok: false }
+  }
+}
+
+// Remove a shared set from the current user's own list; graceful fallback.
+export async function unbookmarkSetShared(id) {
+  try {
+    return await apiUnbookmarkSet(id)
+  } catch (e) {
+    console.warn('Unbookmark failed', e)
+    return { ok: false }
+  }
+}
+
+// Load the ids of the sets the current user owns + bookmarked (from /api/my/sets).
+export async function loadMySetIds() {
+  try {
+    const data = await apiMySets()
+    return Array.isArray(data && data.ids) ? data.ids : []
+  } catch (e) {
+    console.warn('loadMySetIds failed (not authenticated?)', e)
+    return []
+  }
 }
 
 // Per-set view counters, stored under "fc_stats_<setId>" keyed by card index.
