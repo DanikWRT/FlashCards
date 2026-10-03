@@ -800,6 +800,28 @@ class Handler(BaseHTTPRequestHandler):
         if existing is None:
             self._send_json(404, {"ok": False, "error": "not found"})
             return
+        # K30: authorization gate on updating a set — mirror the K21 DELETE
+        # permission policy so PUT is not an unauthenticated write path:
+        #   - anonymous: denied (401)
+        #   - admin (Danya): may edit any set
+        #   - any other logged-in user: may edit ONLY sets they authored
+        #     (author == username); editing someone else's set -> 403.
+        username = self._acting_user()
+        if username is None:
+            self._send_json(401, {"ok": False, "error": "unauthorized"})
+            return
+        row = get_conn().execute(
+            "SELECT author FROM sets WHERE id=?", (sid,)
+        ).fetchone()
+        if row is None:
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        allowed = self._is_admin(username) or row["author"] == username
+        if not allowed:
+            self._send_json(
+                403, {"ok": False, "error": "forbidden: only the author or admin can edit this set"}
+            )
+            return
         # Preserve the existing author across updates.
         obj = self._clean(body, sid, existing.get("author"))
         conn = get_conn()
