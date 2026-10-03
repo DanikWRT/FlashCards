@@ -291,8 +291,13 @@ function ExtendedTest({ set, id }) {
 
   const next = () => {
     const nextPos = run.pos + 1
-    setRun((r) => ({ ...r, pos: nextPos, done: nextPos >= r.target }))
-    setQuestion(makeQuestion(run.pool, nextPos))
+    const doneNow = nextPos >= run.target
+    setRun((r) => ({ ...r, pos: nextPos, done: doneNow }))
+    // Only build the next question when the test is not over yet. When
+    // nextPos reaches the target, run.pool[nextPos] is out of bounds and
+    // buildQuestion(cards, cfg, undefined) would dereference cards[undefined]
+    // and throw (K30: unhandled error on every completed test).
+    if (!doneNow) setQuestion(makeQuestion(run.pool, nextPos))
     setFeedback(false)
     setPairs({})
     setSelLeft(null)
