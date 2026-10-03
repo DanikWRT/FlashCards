@@ -15,6 +15,11 @@ export default defineConfig({
       '/api/sets': 'http://localhost:5199',
       '/api/auth': 'http://localhost:5199',
       '/api/me': 'http://localhost:5199',
+      // K20/K18: leaderboard + my-sets routes live on the :5199 backend but
+      // were missing from the dev proxy, so these calls fell through to the
+      // Vite SPA server (index.html/404) instead of the real endpoint.
+      '/api/leaderboard': 'http://localhost:5199',
+      '/api/my/sets': 'http://localhost:5199',
       '/api/ai': 'http://localhost:5198',
     },
   },
