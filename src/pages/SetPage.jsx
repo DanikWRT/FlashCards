@@ -8,6 +8,7 @@ import {
   resetSetProgress, downloadProgressReport, recordStudyDay,
   getCardStarred, toggleCardStarred, saveBlastScore, pushLeaderboard,
   addCardsShared, initNewCardProgress,
+  apiGetSet,
 } from '../store.js'
 import { matchAnswer } from '../normalize.js'
 
@@ -1817,6 +1818,19 @@ export default function SetPage() {
   // flow can refresh the page set after cards are appended to the server.
   const [set, setSet] = useState(() => getSet(id))
   const [mode, setMode] = useState('cards')
+
+  // K30: on mount, if the set is not already in the local cache (e.g. the
+  // page was reached via a deep/shared link with an empty or stale local
+  // store), fetch it straight from the server so the set still renders.
+  useEffect(() => {
+    if (set) return
+    let active = true
+    apiGetSet(id)
+      .then((s) => { if (active && s && s.id) setSet(s) })
+      .catch(() => { /* keep the not-found state; server unreachable */ })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
   // K22: inline "add cards" form state.
   const [showAdd, setShowAdd] = useState(false)
   const [addText, setAddText] = useState('')
