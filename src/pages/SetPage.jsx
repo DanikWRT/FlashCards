@@ -801,8 +801,12 @@ function reviewOrder(id, cards) {
 }
 
 // Initial work queue excludes mastered cards and is ordered for K9 reviews.
+// K31: when every card is already mastered (nothing left to filter out), fall
+// back to the full deck so the user can keep repeating without resetting
+// progress. Un-mastered cards still come first / stay out of the way as before.
 function initialQueue(id, cards) {
-  return reviewOrder(id, cards).filter((i) => getStatus(id, i) !== 'mastered')
+  const pending = reviewOrder(id, cards).filter((i) => getStatus(id, i) !== 'mastered')
+  return pending.length ? pending : reviewOrder(id, cards)
 }
 
 // Number of cards due at-or-before today (drives the 'no reviews today' screen).
@@ -981,10 +985,11 @@ function Learn({ set, id }) {
     return () => { if (studyRegistry.shuffleNow === s.shuffleNow) studyRegistry.shuffleNow = null }
   }, [running, s.shuffleNow])
 
-  if (masteredCount >= n) {
-    return <StudyDone label="Обучение завершено" onRestart={s.restart} />
-  }
-  if (!s.startedWithDue) {
+  // K31: a fully-mastered (or partially-studied) set must still be repeatable
+  // WITHOUT resetting progress — so only a truly fresh set with nothing due
+  // today gets the NoReviews screen; otherwise rely on `!running` for StudyDone
+  // (as Write/Spell do), letting the repeat pass start even at 25/25 mastered.
+  if (masteredCount === 0 && !s.startedWithDue) {
     return <NoReviews onRestart={s.restart} />
   }
   if (!running) {
